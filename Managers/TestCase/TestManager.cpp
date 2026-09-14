@@ -74,7 +74,7 @@ void TestManager::Initialize()
 
         // content -> entries
         std::vector<FileEntry> entries;
-        if (!fileArchiveManager->Unpack(content.Data(), content.Sign(), entries)) {
+        if (!fileArchiveManager->Unpack(content.Data(), content.CustomRef(), entries)) {
             return false;
         }
 

@@ -6,12 +6,16 @@
 StructuredFileContent::StructuredFileContent() = default;
 
 StructuredFileContent::StructuredFileContent(std::vector<std::uint8_t>& data, uint16_t operation, uint16_t sign):
-    data(std::move(data)), operation(operation), sign(sign){
+    data(std::move(data)), operation(operation), custom(sign){
 }
 
 StructuredFileContent::~StructuredFileContent() = default;
 
-std::vector<std::uint8_t>& StructuredFileContent::Data() {
+const std::vector<std::uint8_t>& StructuredFileContent::Data() const {
+    return data;
+}
+
+std::vector<std::uint8_t>& StructuredFileContent::Data(){
     return data;
 }
 
@@ -62,12 +66,16 @@ void StructuredFileContent::SetOperation(std::uint16_t operation){
     this->operation = operation;
 }
 
-std::uint16_t StructuredFileContent::Sign(){
-    return sign;
+const std::uint16_t& StructuredFileContent::CustomRef() const{
+    return custom;
 }
 
-void StructuredFileContent::SetSign(std::uint16_t sign){
-    this->sign = sign;
+std::uint16_t& StructuredFileContent::CustomRef(){
+    return custom;
+}
+
+void StructuredFileContent::SetCustom(std::uint16_t sign){
+    this->custom = sign;
 }
 
 std::uint16_t StructuredFileContent::GetHeaderSizeBytes() {
@@ -81,7 +89,7 @@ bool StructuredFileContent::SerializeHeader(std::vector<std::uint8_t>& data, std
     if (!SerializationUtils::WriteUnsigned(data, offset, GetMagic()) ||
         !SerializationUtils::WriteUnsigned(data, offset, GetVersion()) ||
         !SerializationUtils::WriteUnsigned(data, offset, operation) ||
-        !SerializationUtils::WriteUnsigned(data, offset, sign) ||
+        !SerializationUtils::WriteUnsigned(data, offset, custom) ||
         !SerializationUtils::WriteUnsigned(data, offset, static_cast<std::uint32_t>(this->data.size()))) {
         return false;
     }
@@ -96,7 +104,7 @@ bool StructuredFileContent::DeserializeHeader(const std::vector<std::uint8_t>& d
     if (!SerializationUtils::ReadUnsigned(data, offset, magic) ||
         !SerializationUtils::ReadUnsigned(data, offset, version) ||
         !SerializationUtils::ReadUnsigned(data, offset, operation) ||
-        !SerializationUtils::ReadUnsigned(data, offset, sign) ||
+        !SerializationUtils::ReadUnsigned(data, offset, custom) ||
         !SerializationUtils::ReadUnsigned(data, offset, size)) {
         return false;
     }

@@ -29,6 +29,9 @@ void ErrorHandler::Log(const std::string& tag, const std::string& message, Error
     if (level >= ErrorLevel::Warning) {
         std::cerr << formatEntry(entry) << std::endl;
     }
+    else{
+        std::cout << formatEntry(entry) << std::endl;
+    }
 }
 
 void ErrorHandler::Info(const std::string& tag, const std::string& message) {
