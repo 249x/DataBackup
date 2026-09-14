@@ -6,70 +6,70 @@
 #include <utility>
 
 std::uint16_t EncryptionHeader::Algorithm() const noexcept {
-	return algorithm;
+        return algorithm;
 }
 
 void EncryptionHeader::SetAlgorithm(std::uint16_t value) noexcept {
-	algorithm = value;
+        algorithm = value;
 }
 
 const std::vector<std::uint8_t>& EncryptionHeader::AlgorithmInfo() const noexcept {
-	return algorithmInfo;
+        return algorithmInfo;
 }
 
 void EncryptionHeader::SetAlgorithmInfo(const std::vector<std::uint8_t>& value) {
-	algorithmInfo = value;
+        algorithmInfo = value;
 }
 
 std::size_t EncryptionHeader::HeaderSize() const noexcept {
-	return headerSize;
+        return headerSize;
 }
 
 EncryptionHeader::SerializedData EncryptionHeader::Serialize() const {
-	if (algorithmInfo.size() > std::numeric_limits<std::uint16_t>::max()) {
-		return {};
-	}
+        if (algorithmInfo.size() > std::numeric_limits<std::uint16_t>::max()) {
+                return {};
+        }
 
-	SerializedData output;
-	std::size_t offset = 0;
-	if (!SerializationUtils::WriteUnsigned(output, offset, Magic) ||
-		!SerializationUtils::WriteUnsigned(output, offset, Version) ||
-		!SerializationUtils::WriteUnsigned(output, offset, algorithm) ||
-		!SerializationUtils::WriteUnsigned(
-			output, offset, static_cast<std::uint16_t>(algorithmInfo.size()))) {
-		return {};
-	}
+        SerializedData output;
+        std::size_t offset = 0;
+        if (!SerializationUtils::WriteUnsigned(output, offset, Magic) ||
+                !SerializationUtils::WriteUnsigned(output, offset, Version) ||
+                !SerializationUtils::WriteUnsigned(output, offset, algorithm) ||
+                !SerializationUtils::WriteUnsigned(
+                        output, offset, static_cast<std::uint16_t>(algorithmInfo.size()))) {
+                return {};
+        }
 
-	if (offset > output.max_size() ||
-		algorithmInfo.size() > output.max_size() - offset) {
-		return {};
-	}
-	output.insert(output.end(), algorithmInfo.begin(), algorithmInfo.end());
-	return output;
+        if (offset > output.max_size() ||
+                algorithmInfo.size() > output.max_size() - offset) {
+                return {};
+        }
+        output.insert(output.end(), algorithmInfo.begin(), algorithmInfo.end());
+        return output;
 }
 
 bool EncryptionHeader::Deserialize(const SerializedData& data) {
-	std::size_t offset = 0;
-	std::uint16_t magic = 0;
-	std::uint16_t version = 0;
-	std::uint16_t parsedAlgorithm = 0;
-	std::uint16_t infoLength = 0;
-	if (!SerializationUtils::ReadUnsigned(data, offset, magic) || magic != Magic ||
-		!SerializationUtils::ReadUnsigned(data, offset, version) || version != Version ||
-		!SerializationUtils::ReadUnsigned(data, offset, parsedAlgorithm) ||
-		!SerializationUtils::ReadUnsigned(data, offset, infoLength)) {
-		return false;
-	}
+        std::size_t offset = 0;
+        std::uint16_t magic = 0;
+        std::uint16_t version = 0;
+        std::uint16_t parsedAlgorithm = 0;
+        std::uint16_t infoLength = 0;
+        if (!SerializationUtils::ReadUnsigned(data, offset, magic) || magic != Magic ||
+                !SerializationUtils::ReadUnsigned(data, offset, version) || version != Version ||
+                !SerializationUtils::ReadUnsigned(data, offset, parsedAlgorithm) ||
+                !SerializationUtils::ReadUnsigned(data, offset, infoLength)) {
+                return false;
+        }
 
-	if (offset > data.size() || infoLength > data.size() - offset ||
-		static_cast<std::size_t>(infoLength) != data.size() - offset) {
-		return false;
-	}
-	std::vector<std::uint8_t> parsedInfo(data.begin() + offset,
-	                         data.begin() + offset + infoLength);
+        // Allow trailing data (ciphertext) after header
+        if (offset > data.size() || infoLength > data.size() - offset) {
+                return false;
+        }
+        std::vector<std::uint8_t> parsedInfo(data.begin() + offset,
+                                 data.begin() + offset + infoLength);
 
-	algorithm = parsedAlgorithm;
-	algorithmInfo = std::move(parsedInfo);
-	headerSize = data.size();
-	return true;
+        algorithm = parsedAlgorithm;
+        algorithmInfo = std::move(parsedInfo);
+        headerSize = offset + infoLength;
+        return true;
 }
