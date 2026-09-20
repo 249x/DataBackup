@@ -36,7 +36,7 @@ void System::Start(){
     CommandManager* command = Get<CommandManager>();
 
     while (true){
-        std::filesystem::path path = IO->GetCurrentPath();
+        std::filesystem::path path = IO->CurrentPath();
         command->RunConsole(path.string() + "|> ");
     }
 }
