@@ -17,16 +17,20 @@ public:
 
     bool Backup(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath);
 	bool Archive(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath);
+	bool Compress(const std::filesystem::path& srcPath,
+                const std::filesystem::path& tarPath,
+                const ::uint16_t& type);
 	bool Encrypt(const std::filesystem::path& srcPath,
                 const std::filesystem::path& tarPath,
-                const std::filesystem::path& keyPath,
                 const ::uint16_t& type);
     bool Restore(const std::filesystem::path& srcPath, 
-		const std::filesystem::path& tarPath, 
-		const std::filesystem::path& keyPath);
+		const std::filesystem::path& tarPath);
+
+	bool SetKeyPath(const std::filesystem::path& keyPath);
 
 private:
+	std::vector<uint8_t> key;
 	bool DealArchive(const StructuredFileContent& content, std::stack<FileEntry>& stack);
-	bool DealEncrypt(const StructuredFileContent& content, std::stack<FileEntry>& stack, const std::vector<uint8_t>& key);
-
+	bool DealCompress(const StructuredFileContent& content, FileEntry& entry);
+	bool DealEncrypt(const StructuredFileContent& content, FileEntry& entry);
 };

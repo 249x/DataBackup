@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cctype>
-#include <iostream>
 #include <sstream>
+#include "../FileIO/FileIOManager.h"
+
+#include "../../General/Debug.h"
 
 CommandManager::CommandManager(System& sys) : Manager(sys) {}
 
@@ -13,8 +15,9 @@ void CommandManager::Initialize() {
     RegisterCommand("help", "Print all commands description",
                     [this]() -> bool {
                         PrintCommands();
-                        return true;   // 正常执行返回 true
+                        return true;
                     });
+    RegisterCommand("run", "Run commands in path", RunCommands, this);
 }
 
 bool CommandManager::RegisterEntry(std::unique_ptr<CommandEntry> entry) {
@@ -42,20 +45,15 @@ bool CommandManager::Execute(const std::vector<std::string>& args) {
     const std::string& commandName = args.front();
     auto it = commands.find(commandName);
     if (it == commands.end()) {
+        Debug::Error("No command is found", "Command");
         return false;
     }
 
     CommandEntry& entry = *it->second;
     const std::vector<std::type_index>& expectedTypes = entry.GetTypes();
-    const std::size_t expectedCount = expectedTypes.size();
-    const std::size_t suppliedCount = args.size() - 1;
-
-    if (expectedCount != suppliedCount) {
-        return false;
-    }
 
     std::vector<const char*> rawArgs;
-    rawArgs.reserve(suppliedCount);
+    rawArgs.reserve(args.size() - 1);
     for (std::size_t i = 1; i < args.size(); ++i) {
         rawArgs.push_back(args[i].c_str());
     }
@@ -119,4 +117,16 @@ void CommandManager::PrintCommands() const {
     for (const auto& [name, entry] : commands) {
         std::cout << entry->ToString() << "\n";
     }
+}
+
+bool CommandManager::RunCommands(const std::filesystem::path& path){
+    FileIOManager* IO = Get<FileIOManager>();
+    std::string commands;
+    if(!IO->ReadText(path, commands)){
+        return false;
+    }
+    if(!Execute(commands)){
+        return false;
+    }
+    return true;
 }

@@ -1,10 +1,9 @@
-#include "ErrorHandler.h"
+#include "Debug.h"
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
 #include <ctime>
 
-// ----- ErrorEntry 实现 -----
 ErrorEntry::ErrorEntry(const std::string& t, const std::string& msg, ErrorLevel lvl)
     : tag(t)
     , message(msg)
@@ -13,15 +12,15 @@ ErrorEntry::ErrorEntry(const std::string& t, const std::string& msg, ErrorLevel 
 {
 }
 
-std::vector<ErrorEntry>& ErrorHandler::getErrors() {
+std::vector<ErrorEntry>& Debug::getErrors() {
     return errors;
 }
 
-std::mutex& ErrorHandler::getMutex() {
+std::mutex& Debug::getMutex() {
     return mutex;
 }
 
-void ErrorHandler::Log(const std::string& tag, const std::string& message, ErrorLevel level) {
+void Debug::Log(const std::string& message, const std::string& tag, ErrorLevel level) {
     std::lock_guard<std::mutex> lock(getMutex());
     ErrorEntry entry(tag, message, level);
     getErrors().push_back(entry);
@@ -34,28 +33,28 @@ void ErrorHandler::Log(const std::string& tag, const std::string& message, Error
     }
 }
 
-void ErrorHandler::Info(const std::string& tag, const std::string& message) {
-    Log(tag, message, ErrorLevel::Info);
+void Debug::Info(const std::string& message, const std::string& tag) {
+    Log(message, tag, ErrorLevel::Info);
 }
 
-void ErrorHandler::Warning(const std::string& tag, const std::string& message) {
-    Log(tag, message, ErrorLevel::Warning);
+void Debug::Warning(const std::string& message, const std::string& tag) {
+    Log(message, tag, ErrorLevel::Warning);
 }
 
-void ErrorHandler::Error(const std::string& tag, const std::string& message) {
-    Log(tag, message, ErrorLevel::Error);
+void Debug::Error(const std::string& message, const std::string& tag) {
+    Log(message, tag, ErrorLevel::Error);
 }
 
-void ErrorHandler::Critical(const std::string& tag, const std::string& message) {
-    Log(tag, message, ErrorLevel::Critical);
+void Debug::Critical(const std::string& message, const std::string& tag) {
+    Log(message, tag, ErrorLevel::Critical);
 }
 
-std::vector<ErrorEntry> ErrorHandler::GetAllErrors() {
+std::vector<ErrorEntry> Debug::GetAllErrors() {
     std::lock_guard<std::mutex> lock(getMutex());
     return getErrors();
 }
 
-std::vector<ErrorEntry> ErrorHandler::GetErrorsByTag(const std::string& tag) {
+std::vector<ErrorEntry> Debug::GetErrorsByTag(const std::string& tag) {
     std::lock_guard<std::mutex> lock(getMutex());
     std::vector<ErrorEntry> result;
     for (const auto& entry : getErrors()) {
@@ -66,19 +65,19 @@ std::vector<ErrorEntry> ErrorHandler::GetErrorsByTag(const std::string& tag) {
     return result;
 }
 
-std::vector<ErrorEntry> ErrorHandler::GetLastErrors(size_t count) {
+std::vector<ErrorEntry> Debug::GetLastErrors(size_t count) {
     std::lock_guard<std::mutex> lock(getMutex());
     const auto& errors = getErrors();
     size_t start = errors.size() > count ? errors.size() - count : 0;
     return std::vector<ErrorEntry>(errors.begin() + start, errors.end());
 }
 
-void ErrorHandler::Clear() {
+void Debug::Clear() {
     std::lock_guard<std::mutex> lock(getMutex());
     getErrors().clear();
 }
 
-void ErrorHandler::ClearByTag(const std::string& tag) {
+void Debug::ClearByTag(const std::string& tag) {
     std::lock_guard<std::mutex> lock(getMutex());
     auto& errors = getErrors();
     errors.erase(
@@ -88,7 +87,7 @@ void ErrorHandler::ClearByTag(const std::string& tag) {
     );
 }
 
-std::string ErrorHandler::ToStringByTag(const std::string& tag) {
+std::string Debug::ToStringByTag(const std::string& tag) {
     auto entries = GetErrorsByTag(tag);
     if (entries.empty()) {
         return "[No errors for tag: " + tag + "]";
@@ -108,7 +107,7 @@ std::string ErrorHandler::ToStringByTag(const std::string& tag) {
     return oss.str();
 }
 
-std::string ErrorHandler::ToStringAll() {
+std::string Debug::ToStringAll() {
     auto errors = GetAllErrors();
     if (errors.empty()) {
         return "[No errors recorded]";
@@ -128,7 +127,7 @@ std::string ErrorHandler::ToStringAll() {
     return oss.str();
 }
 
-std::string ErrorHandler::ToJson(const std::string& tag) {
+std::string Debug::ToJson(const std::string& tag) {
     auto entries = tag.empty() ? GetAllErrors() : GetErrorsByTag(tag);
     
     std::ostringstream oss;
@@ -150,12 +149,12 @@ std::string ErrorHandler::ToJson(const std::string& tag) {
     return oss.str();
 }
 
-size_t ErrorHandler::GetErrorCount() {
+size_t Debug::GetErrorCount() {
     std::lock_guard<std::mutex> lock(getMutex());
     return getErrors().size();
 }
 
-size_t ErrorHandler::GetErrorCountByTag(const std::string& tag) {
+size_t Debug::GetErrorCountByTag(const std::string& tag) {
     std::lock_guard<std::mutex> lock(getMutex());
     size_t count = 0;
     for (const auto& entry : getErrors()) {
@@ -166,12 +165,12 @@ size_t ErrorHandler::GetErrorCountByTag(const std::string& tag) {
     return count;
 }
 
-bool ErrorHandler::HasErrors() {
+bool Debug::HasErrors() {
     std::lock_guard<std::mutex> lock(getMutex());
     return !getErrors().empty();
 }
 
-bool ErrorHandler::HasErrorsAbove(ErrorLevel level) {
+bool Debug::HasErrorsAbove(ErrorLevel level) {
     std::lock_guard<std::mutex> lock(getMutex());
     for (const auto& entry : getErrors()) {
         if (entry.level >= level) {
@@ -181,7 +180,7 @@ bool ErrorHandler::HasErrorsAbove(ErrorLevel level) {
     return false;
 }
 
-std::string ErrorHandler::LevelToString(ErrorLevel level) {
+std::string Debug::LevelToString(ErrorLevel level) {
     switch (level) {
         case ErrorLevel::Info:     return "INFO";
         case ErrorLevel::Warning:  return "WARNING";
@@ -191,7 +190,7 @@ std::string ErrorHandler::LevelToString(ErrorLevel level) {
     }
 }
 
-std::string ErrorHandler::formatEntry(const ErrorEntry& entry, 
+std::string Debug::formatEntry(const ErrorEntry& entry, 
                                       size_t index, 
                                       size_t total) {
     std::ostringstream oss;
@@ -208,7 +207,7 @@ std::string ErrorHandler::formatEntry(const ErrorEntry& entry,
     return oss.str();
 }
 
-std::string ErrorHandler::formatTime(const std::chrono::system_clock::time_point& time) {
+std::string Debug::formatTime(const std::chrono::system_clock::time_point& time) {
     auto time_t = std::chrono::system_clock::to_time_t(time);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         time.time_since_epoch()
@@ -220,7 +219,7 @@ std::string ErrorHandler::formatTime(const std::chrono::system_clock::time_point
     return oss.str();
 }
 
-std::string ErrorHandler::escapeJson(const std::string& str) {
+std::string Debug::escapeJson(const std::string& str) {
     std::ostringstream oss;
     for (char c : str) {
         switch (c) {

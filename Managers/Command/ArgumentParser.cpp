@@ -4,6 +4,8 @@
 #include <cstring>
 #include <filesystem>
 
+#include "../../General/Debug.h"
+
 ArgumentParser::ArgumentParser(){
     registerCommonTypes();
 }
@@ -19,12 +21,14 @@ bool ArgumentParser::IsRegistered(const std::type_index& type) const{
 bool ArgumentParser::Parse(const std::type_index& type, const char* input, std::any& out) const {
     auto it = converters.find(type);
     if (it == converters.end()) {
+        Debug::Error("No parser for " + std::string(type.name()), "ArgParser");
         return false;
     }
     try {
         out = it->second(input);
         return true;
     } catch (const std::exception&) {
+        Debug::Error("Parse " + std::string(input) + " failed", "ArgParser");
         return false;
     }
 }
@@ -33,6 +37,7 @@ bool ArgumentParser::ParseBatch(const std::vector<const char*>& inputs,
                     const std::vector<std::type_index>& types,
                     std::vector<std::any>& outValues) const {
     if (inputs.size() != types.size()) {
+        Debug::Error("Argument count incorret, expecte " + std::to_string(types.size()), "ArgParser");
         return false;
     }
         

@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <filesystem>
 
 namespace detail {
 
@@ -98,6 +99,7 @@ public:
     bool Execute(const std::string& commandLine);
 
     void RunConsole(const std::string& prompt = "> ");
+    bool RunCommands(const std::filesystem::path& path);
     
     void PrintCommands() const;
 

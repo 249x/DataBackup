@@ -4,13 +4,13 @@
 #include <vector>
 
 /*
-基本文件结构
-uint16 magic; // 文件魔数
-uint16 version; // 版本号
-uint16 operation; // 操作类型
-uint16 custom; // 自定义位
-uint32 size; // 数据大小
-uint8*size data; // 数据
+* 基本文件结构
+* uint16 magic; // 文件魔数
+* uint16 version; // 版本号
+* uint16 operation; // 操作类型
+* uint16 custom; // 自定义位
+* uint32 size; // 数据大小
+* uint8*size data; // 数据
 */
 
 class StructuredFileContent {
@@ -42,9 +42,9 @@ public:
     std::uint16_t GetHeaderSizeBytes();
 
 private:
+    std::vector<std::uint8_t> data;
     std::uint16_t operation;
     std::uint16_t custom;
-    std::vector<std::uint8_t> data;
 
     bool SerializeHeader(std::vector<std::uint8_t>& data, std::size_t& offset);
     bool DeserializeHeader(const std::vector<std::uint8_t>& data, std::size_t& offset);

@@ -14,11 +14,6 @@ public:
 	FileEntry() = default;
 	FileEntry(const std::vector<std::uint8_t>& content, const FileMetaData& metadata);
 	FileEntry(std::vector<std::uint8_t>&& content, FileMetaData&& metadata) noexcept;
-
-	FileEntry(const FileEntry&) = default;
-	FileEntry(FileEntry&&) noexcept = default;
-	FileEntry& operator=(const FileEntry&) = default;
-	FileEntry& operator=(FileEntry&&) noexcept = default;
 	~FileEntry() = default;
 
 	const std::vector<std::uint8_t>& Content() const noexcept;

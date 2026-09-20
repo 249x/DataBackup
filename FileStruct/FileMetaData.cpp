@@ -69,7 +69,7 @@ void FileMetaData::SetPermissions(Permissions value) noexcept {
 	permissions = value;
 }
 
-FileMetaData::FileType FileMetaData::Type() const noexcept {
+FileType FileMetaData::Type() const noexcept {
 	return type;
 }
 
@@ -126,8 +126,8 @@ FileMetaData::SerializedData FileMetaData::Serialize() const {
 		static_cast<std::uint64_t>(creationTime.time_since_epoch().count()));
 	SerializationUtils::WriteUnsigned<std::uint32_t>(output, offset,
 		static_cast<std::uint32_t>(permissions));
-	SerializationUtils::WriteUnsigned<std::uint32_t>(output, offset,
-		static_cast<std::uint32_t>(type));
+	SerializationUtils::WriteUnsigned<std::uint8_t>(output, offset,
+		static_cast<std::uint8_t>(type));
 	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, static_cast<std::uint64_t>(size));
 	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, static_cast<std::uint64_t>(hardLinkCount));
 	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, deviceId);
@@ -173,10 +173,13 @@ bool FileMetaData::Deserialize(const SerializedData& serialized) {
 		return false;
 	}
 	result.permissions = static_cast<Permissions>(enumValue);
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, enumValue)) {
+
+	std::uint8_t typeValue = 0;
+	if (!SerializationUtils::ReadUnsigned(serialized, offset, typeValue) ||
+		!IsValidFileTypeValue(typeValue)) {
 		return false;
 	}
-	result.type = static_cast<FileType>(enumValue);
+	result.type = static_cast<FileType>(typeValue);
 
 	if (!SerializationUtils::ReadUnsigned(serialized, offset, result.size) ||
 		!SerializationUtils::ReadUnsigned(serialized, offset, result.hardLinkCount) ||

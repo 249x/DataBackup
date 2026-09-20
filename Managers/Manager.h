@@ -22,7 +22,7 @@ public:
 
     template <typename T>
     T* Register() {
-        return system->Get<T>();
+        return system->Register<T>();
     }
 
     inline System& GetSystem() {

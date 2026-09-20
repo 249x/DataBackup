@@ -1,5 +1,7 @@
 #pragma once
 
+#include "FileType.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -9,10 +11,11 @@ class FileMetaData {
 public:
 	using FileTime = std::filesystem::file_time_type;
 	using Permissions = std::filesystem::perms;
-	using FileType = std::filesystem::file_type;
 	using SerializedData = std::vector<std::uint8_t>;
 
-	static constexpr std::uint32_t SerializationVersion = 1;
+	// v2: type 由 uint32 收窄为 uint8
+	// v3: FileType 取值重排，含义变化
+	static constexpr std::uint32_t SerializationVersion = 3;
 
 	FileMetaData() = default;
 	FileMetaData(const FileMetaData&) = default;
@@ -72,7 +75,7 @@ private:
 	FileTime lastAccessTime{};
 	FileTime creationTime{};
 	Permissions permissions = Permissions::unknown;
-	FileType type = FileType::none;
+	FileType type = FileType::None;
 	std::uintmax_t size = 0;
 	std::uintmax_t hardLinkCount = 0;
 	std::uint64_t deviceId = 0;
