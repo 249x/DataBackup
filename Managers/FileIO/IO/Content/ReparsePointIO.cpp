@@ -9,6 +9,7 @@
 #endif
 
 #include "../../../../General/Debug.h"
+#include "../../../../General/Utf8.h"
 
 namespace fs = std::filesystem;
 
@@ -184,7 +185,7 @@ bool ReadTargetImpl(const fs::path& path, std::vector<std::uint8_t>& content) {
 
 	const std::wstring targetPath =
 		NormalizeTargetPath(std::wstring(target, targetBytes / sizeof(wchar_t)));
-	const std::string utf8 = fs::path(targetPath).u8string();
+	const std::string utf8 = Utf8::FromPath(targetPath);
 	content.assign(utf8.begin(), utf8.end());
 	return true;
 }
@@ -294,7 +295,7 @@ bool ReadTargetImpl(const fs::path& path, std::vector<std::uint8_t>& content) {
 		             "ReparsePoint");
 		return false;
 	}
-	const std::string utf8 = target.u8string();
+	const std::string utf8 = Utf8::FromPath(target);
 	content.assign(utf8.begin(), utf8.end());
 	return true;
 }

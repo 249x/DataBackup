@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "../../../../General/Debug.h"
+#include "../../../../General/Utf8.h"
 
 namespace {
 
@@ -132,7 +133,9 @@ std::string WindowsMetaDataUtils::AccountName(PSID sid) {
 		return {};
 	}
 
-	return std::filesystem::path(name.data()).string();
+	// 账户名可能是非 ASCII（中文用户名等），必须按 UTF-8 存，
+	// 不能用 path::string()（在 MSVC 上会变成 ANSI 代码页而丢字符）
+	return Utf8::FromWide(name.data());
 }
 
 std::uint64_t WindowsMetaDataUtils::AccountId(PSID sid) {

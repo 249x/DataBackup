@@ -15,7 +15,8 @@ public:
 
 	// v2: type 由 uint32 收窄为 uint8
 	// v3: FileType 取值重排，含义变化
-	static constexpr std::uint32_t SerializationVersion = 3;
+	// v4: 条目相对路径并入元数据（原为 FileEntry 的独立字段）
+	static constexpr std::uint32_t SerializationVersion = 4;
 
 	FileMetaData() = default;
 	FileMetaData(const FileMetaData&) = default;
@@ -23,6 +24,10 @@ public:
 	FileMetaData& operator=(const FileMetaData&) = default;
 	FileMetaData& operator=(FileMetaData&&) noexcept = default;
 	~FileMetaData() = default;
+
+	// 条目在备份集内的相对路径, 由遍历者赋值
+	const std::filesystem::path& RelativePath() const noexcept;
+	void SetRelativePath(std::filesystem::path value);
 
 	const std::string& Owner() const noexcept;
 	void SetOwner(std::string owner);
@@ -67,6 +72,7 @@ public:
 	bool Deserialize(const SerializedData& data);
 
 private:
+	std::filesystem::path relativePath;
 	std::string owner;
 	std::string group;
 	std::uint64_t ownerId = 0;

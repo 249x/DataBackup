@@ -1,9 +1,18 @@
 #include "FileMetaData.h"
 
 #include "../General/SerializationUtils.h"
+#include "../General/Utf8.h"
 
 #include <limits>
 #include <utility>
+
+const std::filesystem::path& FileMetaData::RelativePath() const noexcept {
+	return relativePath;
+}
+
+void FileMetaData::SetRelativePath(std::filesystem::path value) {
+	relativePath = std::move(value);
+}
 
 const std::string& FileMetaData::Owner() const noexcept {
 	return owner;
@@ -114,6 +123,7 @@ FileMetaData::SerializedData FileMetaData::Serialize() const {
 	std::size_t offset = 0;
 
 	SerializationUtils::WriteUnsigned<std::uint32_t>(output, offset, SerializationVersion);
+	SerializationUtils::WriteString(output, offset, Utf8::FromPath(relativePath));
 	SerializationUtils::WriteString(output, offset, owner);
 	SerializationUtils::WriteString(output, offset, group);
 	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, ownerId);
@@ -144,7 +154,9 @@ bool FileMetaData::Deserialize(const SerializedData& serialized) {
 	}
 
 	FileMetaData result;
-	if (!SerializationUtils::ReadString(serialized, offset, result.owner) ||
+	std::string relativePath;
+	if (!SerializationUtils::ReadString(serialized, offset, relativePath) ||
+		!SerializationUtils::ReadString(serialized, offset, result.owner) ||
 		!SerializationUtils::ReadString(serialized, offset, result.group) ||
 		!SerializationUtils::ReadUnsigned(serialized, offset, result.ownerId) ||
 		!SerializationUtils::ReadUnsigned(serialized, offset, result.groupId)) {
@@ -189,6 +201,7 @@ bool FileMetaData::Deserialize(const SerializedData& serialized) {
 		return false;
 	}
 
+	result.relativePath = Utf8::ToPath(relativePath);
 	*this = std::move(result);
 	return true;
 }

@@ -57,6 +57,7 @@ bool FileIOManager::Read(const fs::path& inputPath,
         if (!Read(inputPath, entry)) {
             return false;
         }
+        entry.SetPath(inputPath.filename());
         entries.emplace_back(std::move(entry));
         return true;
     }
@@ -70,6 +71,13 @@ bool FileIOManager::Read(const fs::path& inputPath,
         FileEntry entry;
         if (!Read(file.path(), entry)) {
             return false;
+        }
+
+        // 只有目录可以继续跟进：链接与其他重解析点在本平台识别不出（symlink_status
+        // 从不报告 symlink），跟进会把目标内容重复收集一份，还原时还会先占住链接本体的路径
+        // ——去掉这段，junction 就会被当普通目录递归，还原必然报 ERROR_ALREADY_EXISTS(183)
+        if (entry.MetaData().Type() != FileType::Directory) {
+            it.disable_recursion_pending();
         }
 
         entry.SetPath(fs::relative(file.path(), inputPath, error));

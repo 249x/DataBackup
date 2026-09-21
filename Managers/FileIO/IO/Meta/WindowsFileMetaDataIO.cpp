@@ -17,9 +17,22 @@ constexpr const char* LogTag = WindowsMetaDataUtils::LogTag;
 
 bool WindowsFileMetaDataIO::Read(const std::filesystem::path& path, FileMetaData& metadata) const {
 	const std::wstring nativePath = WindowsMetaDataUtils::ToWide(path);
+
+	// 先确认路径存在再读属性。GetFileAttributesW 不跟随重解析点，所以这里判断的是
+	// "链接本体"是否存在——悬空链接同样算存在，与后面用 FILE_FLAG_OPEN_REPARSE_POINT
+	// 打开保持一致；因此不能用 std::filesystem::exists（它会跟随链接而把悬空链接判为不存在）。
 	const DWORD attributes = GetFileAttributesW(nativePath.c_str());
 	if (attributes == INVALID_FILE_ATTRIBUTES) {
-		Debug::Error("Failed to query attributes", LogTag);
+		const DWORD error = GetLastError();
+		if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+			Debug::Error("Path does not exist: " + path.string(), LogTag);
+		} else if (error == ERROR_ACCESS_DENIED) {
+			Debug::Error("Access denied: " + path.string(), LogTag);
+		} else {
+			Debug::Error("Failed to query attributes: " + path.string() +
+			                 " (win32 error " + std::to_string(error) + ")",
+			             LogTag);
+		}
 		return false;
 	}
 

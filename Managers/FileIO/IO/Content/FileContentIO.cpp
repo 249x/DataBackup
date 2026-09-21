@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "../../../../General/Debug.h"
+#include "../../../../General/Utf8.h"
 
 namespace fs = std::filesystem;
 
@@ -38,7 +39,7 @@ bool FileContentIO::Write(const fs::path& path, const std::vector<std::uint8_t>&
             Debug::Error("Link target is empty: " + path.string(), "ContentIO");
             return false;
         }
-        return ReparsePointIO::Create(path, fs::u8path(target));
+        return ReparsePointIO::Create(path, Utf8::ToPath(target));
     }
 
     if (type == FileType::Directory) {

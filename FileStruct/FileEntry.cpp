@@ -43,20 +43,18 @@ void FileEntry::SetMetaData(FileMetaData&& value) noexcept {
 }
 
 const std::filesystem::path& FileEntry::Path() const noexcept {
-	return path;
+	return metadata.RelativePath();
 }
 
 void FileEntry::SetPath(std::filesystem::path value) {
-	path = std::move(value);
+	metadata.SetRelativePath(std::move(value));
 }
 
 FileEntry::SerializedData FileEntry::Serialize() const {
-	const std::string pathString = path.generic_string();
 	const FileMetaData::SerializedData metadataBytes = metadata.Serialize();
 	const auto& contentData = content;
 	SerializedData output;
 	std::size_t offset = 0;
-	SerializationUtils::WriteString(output, offset, pathString);
 	SerializationUtils::WriteBytes(output, offset, metadataBytes);
 	SerializationUtils::WriteBytes(output, offset, contentData);
 	return output;
@@ -64,18 +62,15 @@ FileEntry::SerializedData FileEntry::Serialize() const {
 
 bool FileEntry::Deserialize(const SerializedData& serialized) {
 	std::size_t offset = 0;
-	std::string pathString;
 	SerializedData metadataData;
 	SerializedData contentData;
-	if (!SerializationUtils::ReadString(serialized, offset, pathString) ||
-		!SerializationUtils::ReadBytes(serialized, offset, metadataData) ||
+	if (!SerializationUtils::ReadBytes(serialized, offset, metadataData) ||
 		!SerializationUtils::ReadBytes(serialized, offset, contentData) ||
 		offset != serialized.size()) {
 		return false;
 	}
 
 	FileEntry result;
-	result.path = std::filesystem::u8path(pathString);
 	result.content = std::move(contentData);
 	if (!result.metadata.Deserialize(metadataData)) {
 		return false;

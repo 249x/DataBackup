@@ -1,6 +1,7 @@
 #include "ArchiveManager.h"
 
 #include "../../General/SerializationUtils.h"
+#include "../../General/Utf8.h"
 #include "../Command/CommandManager.h"
 
 #include <algorithm>
@@ -47,7 +48,7 @@ bool ArchiveManager::Pack(const std::vector<FileEntry>& entries,
 		if (!IsSafeRelativePath(relativePath)) {
 			return false;
 		}
-		const std::string path = relativePath.generic_string();
+		const std::string path = Utf8::FromPath(relativePath);
 		if (!paths.insert(path).second) {
 			return false;
 		}
@@ -77,7 +78,7 @@ bool ArchiveManager::Unpack(const std::vector<uint8_t>& archive,
 
 		FileEntry entry;
 		if (!entry.Deserialize(serializedEntry) || !IsSafeRelativePath(entry.Path()) ||
-			!paths.insert(entry.Path().generic_string()).second) {
+			!paths.insert(Utf8::FromPath(entry.Path())).second) {
 			return false;
 		}
 		entries.emplace_back(std::move(entry));

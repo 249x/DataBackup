@@ -33,7 +33,6 @@ public:
     std::filesystem::path CurrentPath();
     bool CD(const std::string& target);
 private:
-    // 拒绝绝对路径、"." 与任何 ".." 分量，避免归档条目写到目标目录之外
     bool IsSafeRelativePath(const std::filesystem::path& path) const;
 
     std::unique_ptr<FileContentIO> contentIO;

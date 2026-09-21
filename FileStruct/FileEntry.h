@@ -35,5 +35,4 @@ public:
 private:
 	std::vector<std::uint8_t> content;
 	FileMetaData metadata;
-	std::filesystem::path path;
 };
