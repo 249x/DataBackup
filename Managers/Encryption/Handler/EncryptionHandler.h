@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -11,6 +12,9 @@ public:
     virtual ~EncryptionHandler();
 
     virtual std::uint16_t GetAlgorithmID() const = 0;
+
+    // 密钥短于该长度时 Encrypt 必然失败，调用方据此提前报错
+    virtual std::size_t MinimumKeySize() const = 0;
 
     // ??: input=??, key=??, output=[IV][??]
     virtual bool Encrypt(const std::vector<std::uint8_t>& input,

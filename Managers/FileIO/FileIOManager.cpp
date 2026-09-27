@@ -1,6 +1,7 @@
 #include "FileIOManager.h"
 
 #include "IO/Content/FileContentIO.h"
+#include "IO/Content/HardLinkIO.h"
 #include "IO/Meta/FileMetaDataIO.h"
 #include "IO/Meta/WindowsFileMetaDataIO.h"
 #include "IO/PathHandler.h"
@@ -8,6 +9,9 @@
 #include "../../General/Debug.h"
 
 #include <memory>
+#include <optional>
+#include <utility>
+
 namespace fs = std::filesystem;
 
 FileIOManager::FileIOManager(System& sys) : Manager(sys)
@@ -21,6 +25,7 @@ FileIOManager::~FileIOManager()
 void FileIOManager::Initialize() {
     contentIO = std::make_unique<FileContentIO>();
     metadataIO = std::make_unique<WindowsFileMetaDataIO>();
+    hardLinkIO = std::make_unique<HardLinkIO>();
     pathHandler = std::make_unique<PathHandler>();
 
     CommandManager* command = Get<CommandManager>();
@@ -43,7 +48,7 @@ bool FileIOManager::Read(const fs::path& filePath, FileEntry& entry) const {
 
 bool FileIOManager::Read(const fs::path& inputPath,
                          std::vector<FileEntry>& entries) const {
-    if (!contentIO || !metadataIO) {
+    if (!contentIO || !metadataIO || !hardLinkIO) {
         Debug::Error("No file reader exist", "FileIO");
         return false;
     }
@@ -73,9 +78,6 @@ bool FileIOManager::Read(const fs::path& inputPath,
             return false;
         }
 
-        // 只有目录可以继续跟进：链接与其他重解析点在本平台识别不出（symlink_status
-        // 从不报告 symlink），跟进会把目标内容重复收集一份，还原时还会先占住链接本体的路径
-        // ——去掉这段，junction 就会被当普通目录递归，还原必然报 ERROR_ALREADY_EXISTS(183)
         if (entry.MetaData().Type() != FileType::Directory) {
             it.disable_recursion_pending();
         }
@@ -84,6 +86,7 @@ bool FileIOManager::Read(const fs::path& inputPath,
         entries.emplace_back(std::move(entry));
     }
 
+    hardLinkIO->Deduplicate(entries);
     return true;
 }
 
@@ -116,30 +119,45 @@ bool FileIOManager::Write(const fs::path& outputPath,
         return true;
     }
 
-    if (!contentIO || !metadataIO) {
+    if (!contentIO || !metadataIO || !hardLinkIO) {
         Debug::Error("No file writer exist", "FileIO");
         return false;
     }
-    
     // 处理读取单个文件的情况
     if (entries.size() == 1 && entries.front().Path().empty()) {
         return Write(outputPath, entries.front());
     }
     std::error_code error;
     fs::create_directories(outputPath, error);
+    // 分三段写：内容与目录结构 -> 硬链接 -> 元数据。
+    std::vector<std::optional<fs::path>> targets;
+    targets.reserve(entries.size());
 
     for (const FileEntry& entry : entries) {
         const fs::path relativePath = entry.Path();
         if (!IsSafeRelativePath(relativePath)) {
             Debug::Warning("Unsafe relative path: " + relativePath.string(), "FileIO");
+            targets.emplace_back(std::nullopt);
             continue;
         }
 
         const fs::path targetPath = outputPath / relativePath;
         fs::create_directories(targetPath.parent_path(), error);
-        if (!Write(targetPath, entry)) {
+        if (!contentIO->Write(targetPath, entry.Content(), entry.MetaData().Type())) {
             Debug::Warning("Failed to write: " + relativePath.string(), "FileIO");
+            targets.emplace_back(std::nullopt);
+            continue;
         }
+        targets.emplace_back(targetPath);
+    }
+
+    hardLinkIO->Relink(entries, targets, *contentIO);
+
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        if (!targets[i].has_value()) {
+            continue;
+        }
+        metadataIO->Write(*targets[i], entries[i].MetaData());
     }
 
     return true;

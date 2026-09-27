@@ -328,14 +328,14 @@ bool CreateSocketImpl(const fs::path& path) {
 
 } // namespace
 
-bool ReparsePointIO::ReadTarget(const fs::path& path, std::vector<std::uint8_t>& content) {
+bool ReparsePointIO::ReadTarget(const fs::path& path, std::vector<std::uint8_t>& content) const {
 	return ReadTargetImpl(path, content);
 }
 
-bool ReparsePointIO::Create(const fs::path& link, const fs::path& target) {
+bool ReparsePointIO::Create(const fs::path& link, const fs::path& target) const {
 	return CreateImpl(link, target);
 }
 
-bool ReparsePointIO::CreateSocket(const fs::path& path) {
+bool ReparsePointIO::CreateSocket(const fs::path& path) const {
 	return CreateSocketImpl(path);
 }

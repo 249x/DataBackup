@@ -3,7 +3,6 @@
 #include <windows.h>
 #include <bcrypt.h>
 
-#pragma comment(lib, "bcrypt.lib")
 
 namespace {
 	constexpr std::size_t DES_KEY_SIZE = 8;
@@ -34,6 +33,10 @@ DesEncryptionHandler::~DesEncryptionHandler() = default;
 
 std::uint16_t DesEncryptionHandler::GetAlgorithmID() const {
 	return AlgorithmID;
+}
+
+std::size_t DesEncryptionHandler::MinimumKeySize() const {
+	return DES_KEY_SIZE;
 }
 
 bool DesEncryptionHandler::Encrypt(const std::vector<std::uint8_t>& input,

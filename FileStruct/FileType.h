@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 /*
  * 文件类型：标识普通文件与特殊文件。
@@ -84,4 +85,25 @@ constexpr const char* FileTypeName(FileType type) {
 		return "socket";
 	}
 	return "invalid";
+}
+
+// 名字 -> 类型，与 FileTypeName 互为逆运算，供文本侧解析（如过滤条的 "type:directory"）。
+// 不认识的名字返回 false 且不改动 type
+inline bool FileTypeFromName(const std::string& name, FileType& type) {
+	static constexpr FileType all[] = {
+	    FileType::None,         FileType::Regular,
+	    FileType::Directory,    FileType::Symlink,
+	    FileType::Junction,     FileType::HardLink,
+	    FileType::Fifo,         FileType::Socket,
+	    FileType::BlockDevice,  FileType::CharacterDevice,
+	    FileType::Other,
+	};
+
+	for (const FileType candidate : all) {
+		if (name == FileTypeName(candidate)) {
+			type = candidate;
+			return true;
+		}
+	}
+	return false;
 }

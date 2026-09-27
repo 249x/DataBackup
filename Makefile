@@ -20,6 +20,8 @@ SRCS = \
     $(wildcard Managers/Compression/Handler/*.cpp) \
     $(wildcard Managers/Encryption/*.cpp) \
     $(wildcard Managers/Encryption/Handler/*.cpp) \
+    $(wildcard Managers/Filter/*.cpp) \
+    $(wildcard Managers/Filter/Filters/*.cpp) \
     $(wildcard Managers/FileIO/*.cpp) \
     $(wildcard Managers/FileIO/IO/*.cpp) \
     $(wildcard Managers/FileIO/IO/Content/*.cpp) \

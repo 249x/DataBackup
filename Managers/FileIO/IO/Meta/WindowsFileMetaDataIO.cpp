@@ -5,6 +5,7 @@
 #include "WindowsMetaDataUtils.h"
 
 #include <windows.h>
+#include <memory>
 #include <string>
 
 #include "../../../../General/Debug.h"
@@ -15,8 +16,13 @@ constexpr const char* LogTag = WindowsMetaDataUtils::LogTag;
 
 } // namespace
 
+WindowsFileMetaDataIO::WindowsFileMetaDataIO()
+	: utils(std::make_unique<WindowsMetaDataUtils>()) {}
+
+WindowsFileMetaDataIO::~WindowsFileMetaDataIO() = default;
+
 bool WindowsFileMetaDataIO::Read(const std::filesystem::path& path, FileMetaData& metadata) const {
-	const std::wstring nativePath = WindowsMetaDataUtils::ToWide(path);
+	const std::wstring nativePath = utils->ToWide(path);
 
 	// 先确认路径存在再读属性。GetFileAttributesW 不跟随重解析点，所以这里判断的是
 	// "链接本体"是否存在——悬空链接同样算存在，与后面用 FILE_FLAG_OPEN_REPARSE_POINT
@@ -53,9 +59,9 @@ bool WindowsFileMetaDataIO::Read(const std::filesystem::path& path, FileMetaData
 		return false;
 	}
 
-	metadata.SetCreationTime(WindowsMetaDataUtils::ToFileTime(information.ftCreationTime));
-	metadata.SetLastAccessTime(WindowsMetaDataUtils::ToFileTime(information.ftLastAccessTime));
-	metadata.SetLastWriteTime(WindowsMetaDataUtils::ToFileTime(information.ftLastWriteTime));
+	metadata.SetCreationTime(utils->ToFileTime(information.ftCreationTime));
+	metadata.SetLastAccessTime(utils->ToFileTime(information.ftLastAccessTime));
+	metadata.SetLastWriteTime(utils->ToFileTime(information.ftLastWriteTime));
 	metadata.SetSize((static_cast<std::uintmax_t>(information.nFileSizeHigh) << 32) |
 		information.nFileSizeLow);
 	metadata.SetHardLinkCount(information.nNumberOfLinks);
@@ -63,7 +69,7 @@ bool WindowsFileMetaDataIO::Read(const std::filesystem::path& path, FileMetaData
 	metadata.SetFileId((static_cast<std::uint64_t>(information.nFileIndexHigh) << 32) |
 		information.nFileIndexLow);
 
-	FileType type = WindowsMetaDataUtils::DetectType(path, attributes, handle);
+	FileType type = utils->DetectType(path, attributes, handle);
 	if (type == FileType::Regular && information.nNumberOfLinks > 1) {
 		type = FileType::HardLink;
 	}
@@ -78,7 +84,7 @@ bool WindowsFileMetaDataIO::Read(const std::filesystem::path& path, FileMetaData
 		  FileMetaData::Permissions::group_read |
 		  FileMetaData::Permissions::others_read);
 
-	if (!WindowsMetaDataUtils::ReadSecurity(nativePath, metadata)) {
+	if (!utils->ReadSecurity(nativePath, metadata)) {
 		Debug::Warning("Failed to read owner/group", LogTag);
 	}
 
@@ -95,7 +101,7 @@ bool WindowsFileMetaDataIO::Write(const std::filesystem::path& path, const FileM
 		return true;
 	}
 
-	const std::wstring nativePath = WindowsMetaDataUtils::ToWide(path);
+	const std::wstring nativePath = utils->ToWide(path);
 	const HANDLE handle = CreateFileW(nativePath.c_str(), FILE_WRITE_ATTRIBUTES,
 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
 		OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
@@ -104,9 +110,9 @@ bool WindowsFileMetaDataIO::Write(const std::filesystem::path& path, const FileM
 		return false;
 	}
 
-	const FILETIME creation = WindowsMetaDataUtils::ToWindowsFileTime(metadata.CreationTime());
-	const FILETIME access = WindowsMetaDataUtils::ToWindowsFileTime(metadata.LastAccessTime());
-	const FILETIME write = WindowsMetaDataUtils::ToWindowsFileTime(metadata.LastWriteTime());
+	const FILETIME creation = utils->ToWindowsFileTime(metadata.CreationTime());
+	const FILETIME access = utils->ToWindowsFileTime(metadata.LastAccessTime());
+	const FILETIME write = utils->ToWindowsFileTime(metadata.LastWriteTime());
 	const bool timesWritten = SetFileTime(handle, &creation, &access, &write) != FALSE;
 
 	CloseHandle(handle);
@@ -134,6 +140,9 @@ bool WindowsFileMetaDataIO::Write(const std::filesystem::path& path, const FileM
 }
 
 #else
+
+WindowsFileMetaDataIO::WindowsFileMetaDataIO() = default;
+WindowsFileMetaDataIO::~WindowsFileMetaDataIO() = default;
 
 bool WindowsFileMetaDataIO::Read(const std::filesystem::path&,
 	                               FileMetaData&) const {

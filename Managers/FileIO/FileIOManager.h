@@ -9,6 +9,7 @@
 
 class FileContentIO;
 class FileMetaDataIO;
+class HardLinkIO;
 class PathHandler;
 
 class FileIOManager : public Manager
@@ -33,9 +34,10 @@ public:
     std::filesystem::path CurrentPath();
     bool CD(const std::string& target);
 private:
-    bool IsSafeRelativePath(const std::filesystem::path& path) const;
-
     std::unique_ptr<FileContentIO> contentIO;
     std::unique_ptr<FileMetaDataIO> metadataIO;
+    std::unique_ptr<HardLinkIO> hardLinkIO;
     std::unique_ptr<PathHandler> pathHandler;
+
+    bool IsSafeRelativePath(const std::filesystem::path& path) const;
 };          

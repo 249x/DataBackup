@@ -5,6 +5,7 @@
 #include "Managers/Encryption/EncryptionManager.h"
 #include "Managers/TestCase/TestManager.h"
 #include "Managers/Compression/CompressionManager.h"
+#include "Managers/Filter/FilterManager.h"
 #include "Managers/Pipeline/FilePipelineManager.h"
 #include "Managers/Command/CommandManager.h"
 
@@ -14,6 +15,7 @@ System::System()
     Register<ArchiveManager>();
     Register<EncryptionManager>();
     Register<CompressionManager>();
+    Register<FilterManager>();
     Register<FilePipelineManager>();
     Register<CommandManager>();
     Register<TestManager>();

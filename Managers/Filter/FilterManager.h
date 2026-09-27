@@ -1,54 +1,54 @@
 #pragma once
 
 #include "../Manager.h"
-#include "FilterRule.h"
+
+#include "Filters/Filter.h"
 
 #include <cstdint>
-#include <filesystem>
-#include <optional>
+#include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
-class FileMetaData;
-
 class FilterManager : public Manager {
 public:
-	// 统一的过滤条件，所有字段可选
-	struct Options {
-		std::optional<std::string> path;
-		FilterRule::MatchMode pathMode = FilterRule::MatchMode::Glob;
-
-		std::optional<std::string> name;
-		FilterRule::MatchMode nameMode = FilterRule::MatchMode::Glob;
-
-		std::optional<FileType> type;
-
-		std::optional<FileMetaData::FileTime> timeFrom;
-		std::optional<FileMetaData::FileTime> timeTo;
-
-		std::optional<std::uintmax_t> sizeMin;
-		std::optional<std::uintmax_t> sizeMax;
-
-		std::optional<std::string> owner;
-		FilterRule::MatchMode ownerMode = FilterRule::MatchMode::Exact;
-	};
+	using Creator = std::unique_ptr<Filter> (*)(const FilterManager& manager, std::string name,
+	                                            std::uint32_t id);
 
 	FilterManager(System& sys);
 	~FilterManager() override;
 
 	void Initialize() override;
 
-	// ---- 唯一入口 ----
-	void AddRule(const Options& options);
-	void AddRule(const FilterRule& rule);
-	void ClearRules();
-	bool HasRules() const noexcept;
-	std::size_t RuleCount() const noexcept;
+	bool RegisterType(std::string typeName, Creator creator);
+	bool IsTypeRegistered(const std::string& typeName) const noexcept;
 
-	// ---- 过滤 ----
-	std::vector<FileMetaData> Filter(const std::vector<FileMetaData>& entries) const;
-	bool ShouldInclude(const FileMetaData& meta) const;
+	Filter* Create(const std::string& spec);
+	std::uint32_t CreateAndAdd(const std::string& spec);
+
+	bool SetParameters(std::uint32_t id, const std::string& parameters);
+
+	Creator CreatorOf(const std::string& typeName) const noexcept;
+
+	bool Remove(std::uint32_t id);
+	void Clear();
+	std::size_t Size() const noexcept;
+	const Filter* Find(std::uint32_t id) const noexcept;
+	const Filter* At(std::size_t index) const noexcept;
+
+	bool PrintFilters();
+
+	bool Include(const FileMetaData& meta) const;
+	bool Exclude(const FileMetaData& meta) const;
 
 private:
-	std::vector<FilterRule> rules;
+	static void ParseSpec(const std::string& spec, std::string& typeName, std::string& parameters);
+	std::string KnownTypeNames() const;
+	template <typename T>
+	void RegisterFilter(const std::string& typeName);
+
+	static constexpr const char* LogTag = "Filter";
+	std::map<std::string, Creator> creators;         // 类型表：名字 -> 创建函数
+	std::vector<std::unique_ptr<Filter>> filters;    // 实例表（线性），按加入顺序
+	std::uint32_t nextId = 1;                        // 下一个要分配的标识（只增不减）
 };

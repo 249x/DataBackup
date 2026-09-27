@@ -2,6 +2,7 @@
 #include "ReparsePointIO.h"
 
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -11,7 +12,9 @@
 
 namespace fs = std::filesystem;
 
-FileContentIO::FileContentIO() = default;
+FileContentIO::FileContentIO()
+    : reparsePointIO(std::make_unique<ReparsePointIO>()) {}
+
 FileContentIO::~FileContentIO() = default;
 
 bool FileContentIO::Read(const fs::path& path, std::vector<std::uint8_t>& content,
@@ -20,7 +23,7 @@ bool FileContentIO::Read(const fs::path& path, std::vector<std::uint8_t>& conten
         return ReadRegularFile(path, content);
     }
     if (IsLinkType(type)) {
-        return ReparsePointIO::ReadTarget(path, content);
+        return reparsePointIO->ReadTarget(path, content);
     }
     // 目录、设备、管道、套接字、Other 都没有可搬运的载荷，仅按类型标记
     content.clear();
@@ -39,7 +42,7 @@ bool FileContentIO::Write(const fs::path& path, const std::vector<std::uint8_t>&
             Debug::Error("Link target is empty: " + path.string(), "ContentIO");
             return false;
         }
-        return ReparsePointIO::Create(path, Utf8::ToPath(target));
+        return reparsePointIO->Create(path, Utf8::ToPath(target));
     }
 
     if (type == FileType::Directory) {
@@ -57,7 +60,7 @@ bool FileContentIO::Write(const fs::path& path, const std::vector<std::uint8_t>&
         return true;
     }
     if (type == FileType::Socket) {
-        return ReparsePointIO::CreateSocket(path);
+        return reparsePointIO->CreateSocket(path);
     }
 
     // 块 / 字符设备、管道、Other 没有可重建的文件系统形态，落为占位空文件并留痕

@@ -33,7 +33,19 @@ ArchiveManager::~ArchiveManager() {
 }
 
 void ArchiveManager::Initialize(){
+	Get<CommandManager>()->RegisterCommand("set-archive", "Enable/disable packing in backup",
+	                                       SetArchive, this);
+}
 
+// 该设置只决定是否做正向处理（打包）：关掉时 Backup 里那一步整段跳过，什么也不做，
+// 所以这里没有可失败的地方
+bool ArchiveManager::SetArchive(bool enabled) {
+	this->enabled = enabled;
+	return true;
+}
+
+bool ArchiveManager::Enabled() const noexcept {
+	return enabled;
 }
 
 bool ArchiveManager::Pack(const std::vector<FileEntry>& entries,

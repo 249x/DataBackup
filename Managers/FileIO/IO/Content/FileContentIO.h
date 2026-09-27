@@ -3,8 +3,11 @@
 #include "../../../../FileStruct/FileType.h"
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 #include <filesystem>
+
+class ReparsePointIO;
 
 class FileContentIO {
 public:
@@ -24,6 +27,8 @@ public:
     bool WriteText(const std::filesystem::path& filePath, const std::string& text) const;
 
 private:
+	std::unique_ptr<ReparsePointIO> reparsePointIO;
+
 	bool ReadRegularFile(const std::filesystem::path& path,
 	                     std::vector<std::uint8_t>& content) const;
 	bool WriteRegularFile(const std::filesystem::path& path,

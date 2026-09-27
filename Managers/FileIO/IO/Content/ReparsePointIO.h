@@ -10,15 +10,13 @@
  */
 class ReparsePointIO {
 public:
-	ReparsePointIO() = delete;
+	ReparsePointIO() = default;
 
-	static bool ReadTarget(const std::filesystem::path& path,
-	                       std::vector<std::uint8_t>& content);
+	bool ReadTarget(const std::filesystem::path& path,
+	                std::vector<std::uint8_t>& content) const;
 
-	static bool Create(const std::filesystem::path& link,
-	                   const std::filesystem::path& target);
+	bool Create(const std::filesystem::path& link,
+	            const std::filesystem::path& target) const;
 
-	// 重建 AF_UNIX 套接字文件（Windows 10 1803+）。套接字是运行时对象，
-	// 这里只还原文件系统侧的标记，不会有监听者
-	static bool CreateSocket(const std::filesystem::path& path);
+	bool CreateSocket(const std::filesystem::path& path) const;
 };

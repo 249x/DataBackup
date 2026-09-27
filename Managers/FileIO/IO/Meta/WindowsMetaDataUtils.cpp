@@ -55,13 +55,39 @@ FileMetaData::FileTime SaturateToFileTime(__int128 ticks) {
 	return ticks < minimum ? FileMetaData::FileTime::min() : FileMetaData::FileTime::max();
 }
 
+// 先在栈上试一次，只有缓冲区不够长才回退到“先问长度再分配”。
+// 账户名可能是非 ASCII（中文用户名等），必须按 UTF-8 存，
+// 不能用 path::string()（在 MSVC 上会变成 ANSI 代码页而丢字符）
+std::string ResolveAccountName(PSID sid) {
+	wchar_t name[256];
+	wchar_t domain[256];
+	DWORD nameSize = 256;
+	DWORD domainSize = 256;
+	SID_NAME_USE use;
+
+	if (LookupAccountSidW(nullptr, sid, name, &nameSize, domain, &domainSize, &use) == FALSE) {
+		if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+			return {};
+		}
+		std::vector<wchar_t> bigName(nameSize);
+		std::vector<wchar_t> bigDomain(domainSize);
+		if (LookupAccountSidW(nullptr, sid, bigName.data(), &nameSize, bigDomain.data(),
+		                      &domainSize, &use) == FALSE) {
+			return {};
+		}
+		return Utf8::FromWide(bigName.data());
+	}
+
+	return Utf8::FromWide(name);
+}
+
 } // namespace
 
-std::wstring WindowsMetaDataUtils::ToWide(const std::filesystem::path& path) {
+std::wstring WindowsMetaDataUtils::ToWide(const std::filesystem::path& path) const {
 	return path.wstring();
 }
 
-FileMetaData::FileTime WindowsMetaDataUtils::ToFileTime(const FILETIME& value) {
+FileMetaData::FileTime WindowsMetaDataUtils::ToFileTime(const FILETIME& value) const {
 	ULARGE_INTEGER stamped;
 	stamped.LowPart = value.dwLowDateTime;
 	stamped.HighPart = value.dwHighDateTime;
@@ -84,7 +110,7 @@ FileMetaData::FileTime WindowsMetaDataUtils::ToFileTime(const FILETIME& value) {
 	return SaturateToFileTime(static_cast<__int128>(bases.fileTicks) + delta.count());
 }
 
-FILETIME WindowsMetaDataUtils::ToWindowsFileTime(FileMetaData::FileTime value) {
+FILETIME WindowsMetaDataUtils::ToWindowsFileTime(FileMetaData::FileTime value) const {
 	const ClockBases& bases = GetClockBases();
 	const auto delta = value.time_since_epoch() - bases.file.time_since_epoch();
 	const auto systemTime = bases.system + std::chrono::duration_cast<
@@ -113,32 +139,25 @@ FILETIME WindowsMetaDataUtils::ToWindowsFileTime(FileMetaData::FileTime value) {
 	return fileTime;
 }
 
-std::string WindowsMetaDataUtils::AccountName(PSID sid) {
+std::string WindowsMetaDataUtils::AccountName(PSID sid) const {
 	if (sid == nullptr || !IsValidSid(sid)) {
 		return {};
 	}
 
-	DWORD nameSize = 0;
-	DWORD domainSize = 0;
-	SID_NAME_USE use;
-	LookupAccountSidW(nullptr, sid, nullptr, &nameSize, nullptr, &domainSize, &use);
-	if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
-		return {};
+	// SID 长度是自描述的，直接拿它当键
+	const std::string key(reinterpret_cast<const char*>(sid),
+	                      static_cast<std::size_t>(GetLengthSid(sid)));
+	const auto cached = accountNames.find(key);
+	if (cached != accountNames.end()) {
+		return cached->second;
 	}
 
-	std::vector<wchar_t> name(nameSize);
-	std::vector<wchar_t> domain(domainSize);
-	if (!LookupAccountSidW(nullptr, sid, name.data(), &nameSize, domain.data(),
-	                       &domainSize, &use)) {
-		return {};
-	}
-
-	// 账户名可能是非 ASCII（中文用户名等），必须按 UTF-8 存，
-	// 不能用 path::string()（在 MSVC 上会变成 ANSI 代码页而丢字符）
-	return Utf8::FromWide(name.data());
+	const std::string name = ResolveAccountName(sid);
+	accountNames.emplace(key, name);
+	return name;
 }
 
-std::uint64_t WindowsMetaDataUtils::AccountId(PSID sid) {
+std::uint64_t WindowsMetaDataUtils::AccountId(PSID sid) const {
 	if (sid == nullptr || !IsValidSid(sid)) {
 		return 0;
 	}
@@ -147,7 +166,7 @@ std::uint64_t WindowsMetaDataUtils::AccountId(PSID sid) {
 }
 
 FileType WindowsMetaDataUtils::DetectType(const std::filesystem::path& path,
-                                          DWORD attributes, HANDLE handle) {
+                                          DWORD attributes, HANDLE handle) const {
 	if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
 		return (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ? FileType::Directory
 		                                                    : FileType::Regular;
@@ -177,7 +196,7 @@ FileType WindowsMetaDataUtils::DetectType(const std::filesystem::path& path,
 	}
 }
 
-bool WindowsMetaDataUtils::ReadSecurity(const std::wstring& path, FileMetaData& metadata) {
+bool WindowsMetaDataUtils::ReadSecurity(const std::wstring& path, FileMetaData& metadata) const {
 	PSECURITY_DESCRIPTOR descriptor = nullptr;
 	PSID owner = nullptr;
 	PSID group = nullptr;

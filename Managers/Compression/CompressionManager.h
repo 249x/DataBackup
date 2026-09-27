@@ -14,8 +14,9 @@ public:
 
     void Initialize() override;
 
-    bool Compression(const std::vector<uint8_t>& input, const std::uint16_t type, std::vector<uint8_t>& output) const;
-	bool Decompression(const std::vector<uint8_t>& input, const std::uint16_t type, std::vector<uint8_t>& output) const;
+    // 算法由调用方给：正向传设置里选的那个，反向传归档里记着的那个
+    bool Compression(const std::vector<uint8_t>& input, std::uint16_t type, std::vector<uint8_t>& output) const;
+	bool Decompression(const std::vector<uint8_t>& input, std::uint16_t type, std::vector<uint8_t>& output) const;
     CompressionHandler* Get(std::uint16_t type) const;
 
     template <typename T>
@@ -34,7 +35,13 @@ public:
         return handler;
     }
 
+    bool SetCompression(bool enabled, std::uint16_t type);
+    bool Enabled() const noexcept;
+    std::uint16_t Type() const noexcept;
+
 private:
 
+    bool enabled = false;
+    std::uint16_t type = 0;
     std::unordered_map<std::uint16_t, std::unique_ptr<CompressionHandler>> handlers;
 };

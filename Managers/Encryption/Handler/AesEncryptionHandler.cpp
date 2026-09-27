@@ -38,6 +38,10 @@ std::uint16_t AesEncryptionHandler::GetAlgorithmID() const {
 	return AlgorithmID;
 }
 
+std::size_t AesEncryptionHandler::MinimumKeySize() const {
+	return AES_KEY_SIZE;
+}
+
 bool AesEncryptionHandler::Encrypt(const std::vector<std::uint8_t>& input,
                                    const std::vector<std::uint8_t>& key,
                                    std::vector<std::uint8_t>& output) {
