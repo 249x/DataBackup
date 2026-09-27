@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <utility>
 #include "../FileIO/FileIOManager.h"
 
 #include "../../General/Debug.h"
@@ -66,23 +67,53 @@ bool CommandManager::Execute(const std::vector<std::string>& args) {
     return entry.ExecuteAny(parsedValues);
 }
 
+std::vector<std::string> CommandManager::Tokenize(const std::string& line) {
+    std::vector<std::string> tokens;
+    std::string token;
+    bool inQuote = false;
+    bool started = false; // 引号也算 token 的开始，所以 "" 能切出一个空 token
+
+    for (const char c : line) {
+        if (c == '"') {
+            inQuote = !inQuote;
+            started = true;
+            continue;
+        }
+        if (!inQuote && std::isspace(static_cast<unsigned char>(c)) != 0) {
+            if (started) {
+                tokens.emplace_back(std::move(token));
+                token.clear();
+                started = false;
+            }
+            continue;
+        }
+        token.push_back(c);
+        started = true;
+    }
+
+    if (inQuote) {
+        Debug::Warning("Unmatched '\"' in: " + line, "Command");
+    }
+    if (started) {
+        tokens.emplace_back(std::move(token));
+    }
+    return tokens;
+}
+
 bool CommandManager::Execute(const std::string& commandLine) {
     std::istringstream stream(commandLine);
     std::string line;
     bool lastResult = true;
 
     while (std::getline(stream, line)) {
-        if (line.find_first_not_of(" \t\r") == std::string::npos) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back(); // 命令文件多半是 CRLF
+        }
+        if (line.find_first_not_of(" \t") == std::string::npos) {
             continue;
         }
 
-        std::istringstream lineStream(line);
-        std::vector<std::string> tokens;
-        std::string token;
-        while (lineStream >> token) {
-            tokens.push_back(token);
-        }
-
+        const std::vector<std::string> tokens = Tokenize(line);
         if (!tokens.empty()) {
             lastResult = Execute(tokens);
             // if (!lastResult) break;

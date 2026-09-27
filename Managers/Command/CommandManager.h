@@ -104,6 +104,8 @@ public:
     void PrintCommands() const;
 
 private:
+    static std::vector<std::string> Tokenize(const std::string& line);
+
     std::unordered_map<std::string, std::unique_ptr<CommandEntry>> commands;
     ArgumentParser parser;
 
