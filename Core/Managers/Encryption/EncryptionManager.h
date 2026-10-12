@@ -1,0 +1,47 @@
+#pragma once
+
+#include "../AlgorithmInfo.h"
+#include "../Manager.h"
+#include "../../General/TypeContainer.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+class EncryptionHandler;
+
+class EncryptionManager : public Manager {
+public:
+    EncryptionManager(System& sys);
+    ~EncryptionManager() override;
+
+    void Initialize() override;
+
+    bool Encryption(const std::vector<std::uint8_t>& data, std::uint16_t type,
+        std::vector<std::uint8_t>& output);
+    bool Decryption(const std::vector<std::uint8_t>& data, std::uint16_t type,
+        std::vector<std::uint8_t>& output);
+
+    EncryptionHandler* Get(std::uint16_t type) const;
+
+    std::vector<AlgorithmInfo> Algorithms() const;
+    std::uint16_t IdOf(const std::string& name) const noexcept;
+    std::size_t KeySizeOf(std::uint16_t type) const noexcept;
+
+    bool SetEncryption(bool enabled, std::uint16_t type);
+    bool SetKeyPath(const std::filesystem::path& keyPath);
+    bool Enabled() const noexcept;
+    std::uint16_t Type() const noexcept;
+    bool HasKey() const noexcept;
+    bool CheckKey();
+
+private:
+    bool enabled = false;
+    std::uint16_t type = 0;
+    std::vector<std::uint8_t> key;
+    std::unordered_map<std::uint16_t, std::unique_ptr<EncryptionHandler>> handlersMap;
+};
