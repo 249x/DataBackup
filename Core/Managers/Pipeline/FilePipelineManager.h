@@ -19,6 +19,16 @@ public:
     bool Backup(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath);
     bool Restore(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath);
 
+	bool SetArchive(bool enabled);
+	bool SetCompression(bool enabled, std::uint16_t type);
+	bool SetEncryption(bool enabled, std::uint16_t type);
+
+	bool ArchiveEnabled() const noexcept;
+	bool CompressionEnabled() const noexcept;
+	bool EncryptionEnabled() const noexcept;
+	std::uint16_t CompressionType() const noexcept;
+	std::uint16_t EncryptionType() const noexcept;
+
 	bool PrintSettings();
 
 private:
@@ -31,4 +41,10 @@ private:
 	bool DealArchive(const StructuredFileContent& content, std::stack<FileEntry>& stack);
 	bool DealCompress(const StructuredFileContent& content, FileEntry& entry);
 	bool DealEncrypt(const StructuredFileContent& content, FileEntry& entry);
+
+	bool archiveEnabled = true;
+	bool compressionEnabled = false;
+	std::uint16_t compressionType = 0;
+	bool encryptionEnabled = false;
+	std::uint16_t encryptionType = 0;
 };

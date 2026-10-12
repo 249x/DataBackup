@@ -55,6 +55,7 @@ CORE_SRCS = \
     $(wildcard Core/Managers/FileIO/IO/Content/*.cpp) \
     $(wildcard Core/Managers/FileIO/IO/Meta/*.cpp) \
     $(wildcard Core/Managers/Pipeline/*.cpp) \
+    $(wildcard Core/Managers/Save/*.cpp) \
     $(wildcard Core/Managers/TestCase/*.cpp)
 
 CONSOLE_SRCS = mainConsole.cpp

@@ -1,4 +1,7 @@
 #pragma once
+
+#include <utility>
+
 #include "General/TypeContainer.h"
 
 class Manager;
@@ -22,5 +25,10 @@ public:
     template <typename T>
     T* Register() {
         return managers.Register<T>(*this);
+    }
+
+    template <typename Func>
+    void ForEach(Func&& func) {
+        managers.ForEach(std::forward<Func>(func));
     }
 };

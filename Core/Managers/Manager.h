@@ -12,6 +12,7 @@ public:
     Manager(System& sys);
     virtual ~Manager();
     virtual void Initialize();
+    virtual void OnDestroy();
 
     std::string GetTypeName() const;
 
@@ -28,4 +29,5 @@ public:
     inline System& GetSystem() {
         return *system;
     }
+
 };

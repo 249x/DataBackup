@@ -39,13 +39,7 @@ public:
         return handler;
     }
 
-    bool SetCompression(bool enabled, std::uint16_t type);
-    bool Enabled() const noexcept;
-    std::uint16_t Type() const noexcept;
-
 private:
 
-    bool enabled = false;
-    std::uint16_t type = 0;
     std::unordered_map<std::uint16_t, std::unique_ptr<CompressionHandler>> handlers;
 };

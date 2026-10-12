@@ -32,16 +32,11 @@ public:
     std::uint16_t IdOf(const std::string& name) const noexcept;
     std::size_t KeySizeOf(std::uint16_t type) const noexcept;
 
-    bool SetEncryption(bool enabled, std::uint16_t type);
     bool SetKeyPath(const std::filesystem::path& keyPath);
-    bool Enabled() const noexcept;
-    std::uint16_t Type() const noexcept;
     bool HasKey() const noexcept;
-    bool CheckKey();
+    bool CheckKey(std::uint16_t type);
 
 private:
-    bool enabled = false;
-    std::uint16_t type = 0;
     std::vector<std::uint8_t> key;
     std::unordered_map<std::uint16_t, std::unique_ptr<EncryptionHandler>> handlersMap;
 };

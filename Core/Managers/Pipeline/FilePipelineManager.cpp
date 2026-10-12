@@ -27,12 +27,67 @@ void FilePipelineManager::Initialize(){
     command->RegisterCommand("restore", "Restore file tree", Restore, this);
 
     command->RegisterCommand("settings", "Print backup settings", PrintSettings, this);
+
+    // 三个开关是整条流水线的设置，所以也由流水线注册命令（名字与原来保持一致）
+    command->RegisterCommand("set-archive", "Enable/disable packing in backup",
+                             SetArchive, this);
+    command->RegisterCommand("set-compress", "Set compression: <enable> <algorithm>",
+                             SetCompression, this);
+    command->RegisterCommand("set-encrypt", "Set encryption: <enable> <algorithm>",
+                             SetEncryption, this);
+}
+
+// 打包没有可失败的地方：关掉时 Backup 里那一步整段跳过
+bool FilePipelineManager::SetArchive(bool enabled){
+    archiveEnabled = enabled;
+    return true;
+}
+
+// 压缩/加密要校验算法号：开着却指了个不存在的算法，那是设置错误
+bool FilePipelineManager::SetCompression(bool enabled, std::uint16_t type){
+    CompressionManager* compression = Get<CompressionManager>();
+    if (compression == nullptr || (enabled && compression->Get(type) == nullptr)){
+        Debug::Error("No compression handler with id " + std::to_string(type), "Pipeline");
+        return false;
+    }
+    compressionEnabled = enabled;
+    compressionType = type;
+    return true;
+}
+
+bool FilePipelineManager::SetEncryption(bool enabled, std::uint16_t type){
+    EncryptionManager* encryption = Get<EncryptionManager>();
+    if (encryption == nullptr || (enabled && encryption->Get(type) == nullptr)){
+        Debug::Error("No encryption handler with id " + std::to_string(type), "Pipeline");
+        return false;
+    }
+    encryptionEnabled = enabled;
+    encryptionType = type;
+    return true;
+}
+
+bool FilePipelineManager::ArchiveEnabled() const noexcept{
+    return archiveEnabled;
+}
+
+bool FilePipelineManager::CompressionEnabled() const noexcept{
+    return compressionEnabled;
+}
+
+bool FilePipelineManager::EncryptionEnabled() const noexcept{
+    return encryptionEnabled;
+}
+
+std::uint16_t FilePipelineManager::CompressionType() const noexcept{
+    return compressionType;
+}
+
+std::uint16_t FilePipelineManager::EncryptionType() const noexcept{
+    return encryptionType;
 }
 
 bool FilePipelineManager::Backup(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath){
     FileIOManager* IO = Get<FileIOManager>();
-    ArchiveManager* archive = Get<ArchiveManager>();
-    CompressionManager* compression = Get<CompressionManager>();
     EncryptionManager* encryption = Get<EncryptionManager>();
 
     std::vector<FileEntry> entries;
@@ -46,21 +101,21 @@ bool FilePipelineManager::Backup(const std::filesystem::path& srcPath, const std
         return false;
     }
 
-    if (encryption->Enabled() && !encryption->CheckKey()) {
+    if (encryptionEnabled && !encryption->CheckKey(encryptionType)) {
         return false;
     }
 
-    if (archive->Enabled() && !PackEntries(entries)) {
+    if (archiveEnabled && !PackEntries(entries)) {
         return false;
     }
-    if (compression->Enabled() && !CompressEntries(entries, compression->Type())) {
+    if (compressionEnabled && !CompressEntries(entries, compressionType)) {
         return false;
     }
-    if (encryption->Enabled() && !EncryptEntries(entries, encryption->Type())) {
+    if (encryptionEnabled && !EncryptEntries(entries, encryptionType)) {
         return false;
     }
 
-    if (archive->Enabled()) {
+    if (archiveEnabled) {
         return IO->WriteContent(tarPath, entries.front().Content());
     }
     if (entries.size() == 1) {
@@ -115,15 +170,13 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
 }
 
 bool FilePipelineManager::PrintSettings() {
-    ArchiveManager* archive = Get<ArchiveManager>();
-    CompressionManager* compression = Get<CompressionManager>();
     EncryptionManager* encryption = Get<EncryptionManager>();
 
-    std::cout << "archive  : " << (archive->Enabled() ? "on" : "off") << "\n"
-              << "compress : " << (compression->Enabled() ? "on" : "off")
-              << " (algorithm " << compression->Type() << ")\n"
-              << "encrypt  : " << (encryption->Enabled() ? "on" : "off")
-              << " (algorithm " << encryption->Type() << ", key "
+    std::cout << "archive  : " << (archiveEnabled ? "on" : "off") << "\n"
+              << "compress : " << (compressionEnabled ? "on" : "off")
+              << " (algorithm " << compressionType << ")\n"
+              << "encrypt  : " << (encryptionEnabled ? "on" : "off")
+              << " (algorithm " << encryptionType << ", key "
               << (encryption->HasKey() ? "loaded" : "missing") << ")\n";
     return true;
 }

@@ -8,6 +8,7 @@
 #include "Managers/Filter/FilterManager.h"
 #include "Managers/Pipeline/FilePipelineManager.h"
 #include "Managers/Command/CommandManager.h"
+#include "Managers/Save/SaveManager.h"
 
 System::System()
 {
@@ -19,6 +20,7 @@ System::System()
     Register<FilePipelineManager>();
     Register<CommandManager>();
     Register<TestManager>();
+    Register<SaveManager>();
     
     managers.ForEach([](Manager* obj) {
         obj->Initialize();
@@ -28,7 +30,9 @@ System::System()
 }
 
 System::~System(){
-    
+    managers.ForEach([](Manager* obj) {
+        obj->OnDestroy();
+    });
 }
 
 void System::Start(){
@@ -39,6 +43,8 @@ void System::Start(){
 
     while (true){
         std::filesystem::path path = IO->CurrentPath();
-        command->RunConsole(path.string() + "|> ");
+        if (!command->RunConsole(path.string() + "|> ")) {
+            break;
+        }
     }
 }

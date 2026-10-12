@@ -11,14 +11,7 @@ public:
 	ArchiveManager(System& sys);
 	~ArchiveManager() override;
 
-	void Initialize() override;
-
+	// 这里只管“打包/解包”本身；做不做打包由流水线决定（见 FilePipelineManager）
 	bool Pack(const std::vector<FileEntry>& entries, std::uint16_t& fileCount, std::vector<uint8_t>& archive) const;
 	bool Unpack(const std::vector<uint8_t>& archive, const std::uint16_t fileCount, std::vector<FileEntry>& entries) const;
-
-	bool SetArchive(bool enabled);
-	bool Enabled() const noexcept;
-
-private:
-	bool enabled = true;
 };

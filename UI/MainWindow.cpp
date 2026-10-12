@@ -237,7 +237,7 @@ QWidget* MainWindow::BuildBackupTab() {
     optGrid->setHorizontalSpacing(12);
 
     optArchive = new QCheckBox(QStringLiteral("打包：把整棵目录树拼成单个归档文件"), optBox);
-    optArchive->setChecked(true); // 与 ArchiveManager 的默认值一致
+    optArchive->setChecked(true); // 与流水线的默认值一致
     optGrid->addWidget(optArchive, 0, 0, 1, 3);
 
     optCompress = new QCheckBox(QStringLiteral("压缩"), optBox);
@@ -571,24 +571,24 @@ QWidget* MainWindow::BuildLogTab() {
 // ---------------------------------------------------------------- 内核调用
 
 bool MainWindow::ApplySettingsToBackend(QString& error) {
-    auto* archive = sys.Get<ArchiveManager>();
-    auto* compression = sys.Get<CompressionManager>();
+    auto* pipeline = sys.Get<FilePipelineManager>();
     auto* encryption = sys.Get<EncryptionManager>();
-    if (archive == nullptr || compression == nullptr || encryption == nullptr) {
+    if (pipeline == nullptr || encryption == nullptr) {
         error = QStringLiteral("内核 Manager 未初始化。");
         return false;
     }
 
-    archive->SetArchive(optArchive->isChecked());
+    // 打包/压缩/加密的开关与算法号都由流水线持有，界面只往一个地方推
+    pipeline->SetArchive(optArchive->isChecked());
 
     const auto compressId = static_cast<unsigned short>(compressAlgo->currentData().toUInt());
-    if (!compression->SetCompression(optCompress->isChecked(), compressId)) {
+    if (!pipeline->SetCompression(optCompress->isChecked(), compressId)) {
         error = QStringLiteral("压缩算法无效。");
         return false;
     }
 
     const auto encryptId = static_cast<unsigned short>(encryptAlgo->currentData().toUInt());
-    if (!encryption->SetEncryption(optEncrypt->isChecked(), encryptId)) {
+    if (!pipeline->SetEncryption(optEncrypt->isChecked(), encryptId)) {
         error = QStringLiteral("加密算法无效。");
         return false;
     }

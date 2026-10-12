@@ -1,7 +1,6 @@
 #include "CompressionManager.h"
 #include "Handler/HuffmanHandler.h"
 #include "Handler/RleHandler.h"
-#include "../Command/CommandManager.h"
 #include "../../General/Debug.h"
 
 #include <algorithm>
@@ -16,29 +15,7 @@ CompressionManager::~CompressionManager(){
 void CompressionManager::Initialize() {
     Register<HuffmanHandler>();
     Register<RleHandler>();
-
-    Manager::Get<CommandManager>()->RegisterCommand(
-        "set-compress", "Set compression: <enable> <algorithm>", SetCompression, this);
 }
-
-bool CompressionManager::SetCompression(bool enabled, std::uint16_t type) {
-    if (enabled && Get(type) == nullptr) {
-        Debug::Error("No compression handler with id " + std::to_string(type), "Compression");
-        return false;
-    }
-    this->enabled = enabled;
-    this->type = type;
-    return true;
-}
-
-bool CompressionManager::Enabled() const noexcept {
-    return enabled;
-}
-
-std::uint16_t CompressionManager::Type() const noexcept {
-    return type;
-}
-
 
 bool CompressionManager::Compression(const std::vector<uint8_t>& input, std::uint16_t type, std::vector<uint8_t>& output) const{
     CompressionHandler* handler = Get(type);

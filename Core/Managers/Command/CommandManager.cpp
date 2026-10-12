@@ -122,27 +122,28 @@ bool CommandManager::Execute(const std::string& commandLine) {
     return lastResult;
 }
 
-void CommandManager::RunConsole(const std::string& prompt) {
+bool CommandManager::RunConsole(const std::string& prompt) {
     std::string line;
 
     std::cout << prompt << std::flush;
     if (!std::getline(std::cin, line)) {
         std::cout << "\n";
-        return;
+        return true; // EOF：保持老行为，由调用方决定（System::Start 里会继续刷提示符）
     }
 
     auto notSpace = [](unsigned char c) { return !std::isspace(c); };
     auto first = std::find_if(line.begin(), line.end(), notSpace);
     if (first == line.end()) {
-        return;
+        return true;
     }
     auto last = std::find_if(line.rbegin(), line.rend(), notSpace).base();
     std::string trimmed(first, last);
 
     if (trimmed == "quit" || trimmed == "exit") {
-        exit(0);
+        return false;
     }
     Execute(trimmed);
+    return true;
 }
 void CommandManager::PrintCommands() const {
     for (const auto& [name, entry] : commands) {

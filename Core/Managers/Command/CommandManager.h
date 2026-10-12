@@ -98,7 +98,7 @@ public:
     bool Execute(const std::vector<std::string>& args);
     bool Execute(const std::string& commandLine);
 
-    void RunConsole(const std::string& prompt = "> ");
+    bool RunConsole(const std::string& prompt = "> ");
     bool RunCommands(const std::filesystem::path& path);
     
     void PrintCommands() const;

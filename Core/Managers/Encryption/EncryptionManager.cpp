@@ -21,8 +21,6 @@ void EncryptionManager::Initialize() {
 		std::make_unique<DesEncryptionHandler>(*this);
 
 
-	Manager::Get<CommandManager>()->RegisterCommand(
-		"set-encrypt", "Set encryption: <enable> <algorithm>", SetEncryption, this);
 	Manager::Get<CommandManager>()->RegisterCommand("key", "Set path of key", SetKeyPath, this);
 }
 
@@ -40,7 +38,7 @@ bool EncryptionManager::HasKey() const noexcept {
 }
 
 
-bool EncryptionManager::CheckKey() {
+bool EncryptionManager::CheckKey(std::uint16_t type) {
 	EncryptionHandler* handler = Get(type);
 	if (handler == nullptr) {
 		Debug::Error("No encryption handler with id " + std::to_string(type), "Encryption");
@@ -58,24 +56,6 @@ bool EncryptionManager::CheckKey() {
 		return false;
 	}
 	return true;
-}
-
-bool EncryptionManager::SetEncryption(bool enabled, std::uint16_t type) {
-	if (enabled && Get(type) == nullptr) {
-		Debug::Error("No encryption handler with id " + std::to_string(type), "Encryption");
-		return false;
-	}
-	this->enabled = enabled;
-	this->type = type;
-	return true;
-}
-
-bool EncryptionManager::Enabled() const noexcept {
-	return enabled;
-}
-
-std::uint16_t EncryptionManager::Type() const noexcept {
-	return type;
 }
 
 EncryptionHandler* EncryptionManager::Get(std::uint16_t type) const {

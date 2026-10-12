@@ -13,6 +13,11 @@ void Manager::Initialize()
 
 }
 
+void Manager::OnDestroy()
+{
+    
+}
+
 std::string Manager::GetTypeName() const {
     return typeid(*this).name();
 }
