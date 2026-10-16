@@ -34,5 +34,6 @@ bool OwnerFilter::Match(const FileMetaData& meta) const {
 }
 
 std::string OwnerFilter::ToString() const {
-	return Name() + ":" + RawParameters();
+	// 字面串本身就是 UTF-8（属主不比路径），拼回去即可
+	return Name() + ":" + TextMatch::Compose(shape, head, tail);
 }

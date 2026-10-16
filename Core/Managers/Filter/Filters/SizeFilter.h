@@ -42,6 +42,8 @@ private:
 	};
 
 	static char LowerAscii(char c) noexcept;
+	// 字节数 -> 文本：能整除就用 k/m/g（二进制），否则写字节数；两者 ParseSize 都能读回来
+	static std::string FormatSize(std::uintmax_t value);
 	// "1024" / "1k" / "2Mb" -> 字节数；格式不对或溢出返回 false
 	static bool ParseSize(const std::string& text, std::uintmax_t& out);
 	// 记号的形状与端点值；值本身由 ParseSize 解释

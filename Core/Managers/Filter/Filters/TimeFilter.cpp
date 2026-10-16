@@ -64,22 +64,21 @@ bool TimeFilter::ParseDate(const std::string& text, std::tm& out) {
 	return true;
 }
 
-TimeFilter::FileTime TimeFilter::FromCalendar(const std::tm& tm) {
+const TimeFilter::Anchor& TimeFilter::TimeAnchor() {
 	/*
-	 * time_t -> FileTime。
+	 * 两个时钟的基准对。
 	 *
 	 * C++17 没有两个时钟之间的标准换算（std::chrono::clock_cast 是 C++20），而 Windows 上
 	 * file_clock 的起点与 system_clock 不同（本机是 Unix 纪元 + 6437664000s）。这里在首次
 	 * 使用时采样一对基准点，之后按线性关系平移——两个 now() 之间只隔几十纳秒，对"天"这一
-	 * 粒度的比较毫无影响。
+	 * 粒度的比较毫无影响。解析与还原共用同一对，所以文本往返是精确的。
 	 */
-	struct Anchor {
-		std::chrono::system_clock::time_point system;
-		FileTime file;
-	};
-	static const Anchor anchor = [] {
-		return Anchor{std::chrono::system_clock::now(), FileTime::clock::now()};
-	}();
+	static const Anchor anchor{std::chrono::system_clock::now(), FileTime::clock::now()};
+	return anchor;
+}
+
+TimeFilter::FileTime TimeFilter::FromCalendar(const std::tm& tm) {
+	const Anchor& anchor = TimeAnchor();
 
 	std::tm local = tm;
 	const std::time_t seconds = std::mktime(&local);
@@ -89,6 +88,32 @@ TimeFilter::FileTime TimeFilter::FromCalendar(const std::tm& tm) {
 
 	const auto system = std::chrono::system_clock::from_time_t(seconds);
 	return anchor.file + std::chrono::duration_cast<FileTime::duration>(system - anchor.system);
+}
+
+std::string TimeFilter::FormatPoint(FileTime when) {
+	// FromCalendar 的逆运算：FileTime -> system_clock -> 本地时间文本。
+	// to_time_t 会把亚秒截掉，而解析出来的时间点本来就是整秒，所以往返是精确的
+	const Anchor& anchor = TimeAnchor();
+	const auto system =
+	    anchor.system +
+	    std::chrono::duration_cast<std::chrono::system_clock::duration>(when - anchor.file);
+	const std::time_t seconds = std::chrono::system_clock::to_time_t(system);
+
+	std::tm local{};
+#if defined(_WIN32)
+	const bool ok = localtime_s(&local, &seconds) == 0;
+#else
+	const bool ok = localtime_r(&seconds, &local) != nullptr;
+#endif
+	if (!ok) {
+		return "?";
+	}
+
+	char buffer[32] = {};
+	if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &local) == 0) {
+		return "?";
+	}
+	return buffer;
 }
 
 bool TimeFilter::ParsePoint(const std::string& text, FileTime& out) {
@@ -285,5 +310,27 @@ bool TimeFilter::Match(const FileMetaData& meta) const {
 }
 
 std::string TimeFilter::ToString() const {
-	return Name() + ":" + RawParameters();
+	// 字段 + 上下界还原成文本：write 是默认值所以不写前缀；原来的 "A..B" 与
+	// "min=A max=B" 语义相同，解析回去得到同一对时间点
+	std::string text;
+	switch (field) {
+	case Field::Access:
+		text = "access ";
+		break;
+	case Field::Create:
+		text = "create ";
+		break;
+	case Field::Write:
+		break;
+	}
+	if (hasMin) {
+		text += "min=" + FormatPoint(lower);
+	}
+	if (hasMax) {
+		if (hasMin) {
+			text += ' ';
+		}
+		text += "max=" + FormatPoint(upper);
+	}
+	return Name() + ":" + text;
 }

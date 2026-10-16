@@ -12,6 +12,7 @@
 
 #include "../Command/CommandManager.h"
 #include "../../General/Debug.h"
+#include "../../General/SerializationUtils.h"
 
 #include <algorithm>
 #include <iostream>
@@ -79,6 +80,12 @@ void FilterManager::Initialize() {
 	command->RegisterCommand("set-filter", "Change parameters of a filter: <id> <parameters>",
 	                         SetParameters, this);
 	command->RegisterCommand("filters", "Print all filters", PrintFilters, this);
+	command->RegisterCommand("clear-filters", "Remove all filters", [this]() -> bool {
+		const std::size_t count = Size();
+		Clear();
+		Debug::Info("Removed " + std::to_string(count) + " filter(s)", LogTag);
+		return true;
+	});
 }
 
 void FilterManager::ParseSpec(const std::string& spec, std::string& typeName,
@@ -150,7 +157,7 @@ FilterManager::Creator FilterManager::CreatorOf(const std::string& typeName) con
 	return entry != nullptr ? entry->creator : nullptr;
 }
 
-Filter* FilterManager::Create(const std::string& spec) {
+Filter* FilterManager::Build(const std::string& spec, std::uint32_t id) {
 	std::string typeName;
 	std::string parameters;
 	ParseSpec(spec, typeName, parameters);
@@ -161,7 +168,7 @@ Filter* FilterManager::Create(const std::string& spec) {
 		return nullptr;
 	}
 
-	std::unique_ptr<Filter> filter = entry->creator(*this, typeName, nextId);
+	std::unique_ptr<Filter> filter = entry->creator(*this, typeName, id);
 	if (!filter) {
 		Debug::Error("Filter creator failed for type '" + typeName + "'", LogTag);
 		return nullptr;
@@ -169,15 +176,37 @@ Filter* FilterManager::Create(const std::string& spec) {
 
 	filter->SetParameters(parameters);
 
-	++nextId;
 	Filter* raw = filter.get();
 	filters.push_back(std::move(filter));
 	return raw;
 }
 
+Filter* FilterManager::Create(const std::string& spec) {
+	Filter* filter = Build(spec, nextId);
+	if (filter != nullptr) {
+		++nextId;
+	}
+	return filter;
+}
+
 std::uint32_t FilterManager::CreateAndAdd(const std::string& spec) {
 	const Filter* filter = Create(spec);
 	return filter != nullptr ? filter->Id() : 0;
+}
+
+bool FilterManager::AddWithId(std::uint32_t id, const std::string& spec) {
+	if (Find(id) != nullptr) {
+		Debug::Warning("Saved filter id " + std::to_string(id) + " is already taken, skipped",
+		               LogTag);
+		return false;
+	}
+	if (Build(spec, id) == nullptr) {
+		return false; // 原因 Build 已经记过日志
+	}
+	if (nextId <= id) {
+		nextId = id + 1; // 标识只增不减，从存档里恢复出来的也不例外
+	}
+	return true;
 }
 
 bool FilterManager::Remove(std::uint32_t id) {
@@ -275,4 +304,76 @@ bool FilterManager::Exclude(const FileMetaData& meta) const {
 		}
 	}
 	return true;
+}
+
+// ---------------------------------------------------------------- 存档
+
+bool FilterManager::Save(std::vector<std::uint8_t>& data) {
+	data.clear();
+	SerializationUtils io;
+
+	std::uint32_t count = 0;
+	for (const std::unique_ptr<Filter>& filter : filters) {
+		if (filter) {
+			++count;
+		}
+	}
+
+	// 格式：nextId(4) + 条数(4) + 每条 [标识(4) + 规格串]
+	if (!io.WriteUnsigned(data, nextId) || !io.WriteUnsigned(data, count)) {
+		Debug::Error("Failed to serialize filters", LogTag);
+		return false;
+	}
+
+	for (const std::unique_ptr<Filter>& filter : filters) {
+		if (!filter) {
+			continue;
+		}
+		// 存 ToString()（规范形式）：它由解析结果拼出来，所以存档里的规格与"实际判定"必然一致
+		if (!io.WriteUnsigned(data, filter->Id()) || !io.WriteString(data, filter->ToString())) {
+			Debug::Error("Failed to serialize filters", LogTag);
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FilterManager::Load(const std::vector<std::uint8_t>& data) {
+	SerializationUtils io;
+	std::uint32_t savedNextId = 1;
+	std::uint32_t count = 0;
+	if (!io.ReadUnsigned(data, savedNextId) || !io.ReadUnsigned(data, count)) {
+		Debug::Error("Saved filters are too short", LogTag);
+		return false;
+	}
+	if (count > data.size()) {
+		// 每条至少 8 字节，所以用条数当上界就能挡掉坏档引起的巨额分配
+		Debug::Error("Saved filters are corrupt (" + std::to_string(count) + " entries)", LogTag);
+		return false;
+	}
+
+	// 先把整段读完确认没坏，再落地：半途失败时原来的列表不会被改坏
+	std::vector<std::pair<std::uint32_t, std::string>> entries;
+	entries.reserve(count);
+	for (std::uint32_t index = 0; index < count; ++index) {
+		std::uint32_t id = 0;
+		std::string spec;
+		if (!io.ReadUnsigned(data, id) || !io.ReadString(data, spec)) {
+			Debug::Error("Saved filters are truncated", LogTag);
+			return false;
+		}
+		entries.emplace_back(id, std::move(spec));
+	}
+
+	Clear();
+	nextId = savedNextId > 0 ? savedNextId : 1;
+
+	for (const std::pair<std::uint32_t, std::string>& entry : entries) {
+		AddWithId(entry.first, entry.second); // 恢复不了的条目自己会记日志，不打断其余的
+	}
+	return true;
+}
+
+std::uint32_t FilterManager::SaveID() const {
+	return SaveIDValue;
 }

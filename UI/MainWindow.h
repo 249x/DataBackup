@@ -34,13 +34,12 @@ private:
     QWidget* BuildFilterTab();
     QWidget* BuildLogTab();
 
-    // 把界面上的开关推给内核的各个 Manager
+    bool PushSettings(QString& error);
+    void SyncSettingsToBackend();
     bool ApplySettingsToBackend(QString& error);
-    // 密钥来源控件由调用方给：备份页和还原页各有一套，互不干扰
     bool LoadKey(QComboBox* source, QLineEdit* edit, unsigned short algorithmId, QString& error);
 
     void RefreshSettingsPreview();
-    // 读出备份文件头，告诉用户这个备份里做了哪些处理
     void RefreshRestoreInfo();
     void RefreshFilterSummary();
     void RefreshFilterTable();
@@ -53,7 +52,6 @@ private:
     void EditSelectedFilter();
     void RemoveSelectedFilter();
 
-    // 在后台线程跑内核操作，主线程继续响应界面
     void RunJob(const QString& title, const std::function<bool()>& work,
                 QProgressBar* bar, QLabel* status);
 
@@ -90,7 +88,7 @@ private:
     QProgressBar* restoreBar = nullptr;
     QLabel* restoreStatus = nullptr;
 
-    // 从备份文件头里识别出来的信息（用于还原时判断要不要密钥）
+    // 从备份文件头里识别出来的信息
     bool backupEncrypted = false;
     unsigned short backupEncryptAlgorithm = 0;
 
@@ -100,6 +98,11 @@ private:
 
     // 日志页
     QPlainTextEdit* logView = nullptr;
+
+    // 启动时把流水线（可能刚从存档读回来）的值灌进控件。这段时间里控件的信号不算
+    // "用户改动"：控件是一个个同步的，同步到一半时推回流水线会把还没同步的那些
+    // 控件（仍是默认值）当成用户设置写进去，刚读出来的设置就被覆盖了
+    bool syncingSettings = false;
 
     bool busy = false;
 };

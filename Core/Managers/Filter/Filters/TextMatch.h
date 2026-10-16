@@ -43,6 +43,10 @@ public:
 	// 去掉首尾 ASCII 空白
 	static std::string Trim(const std::string& text);
 
+	// 把"形状 + 字面串"拼回模式串（ToString 用：参数文本由解析结果还原，不再保存原文）。
+	// 与 Split 互为逆运算；Glob 的 head 就是整条模式串，直接返回
+	static std::string Compose(Shape shape, std::string_view head, std::string_view tail);
+
 	// 把模式解释成"形状 + 最多两段字面串"（仍是 UTF-8 片段，由调用方按自己的字符类型转换）。
 	// 形状推断只看 '*' '?'，它们在 UTF-8 与 UTF-16 里都是单字符，所以在 UTF-8 上做没问题。
 	// 模式为空（或全空白）时返回 false，调用方据此把条目标成无效

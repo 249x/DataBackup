@@ -195,10 +195,18 @@ bool FileIOManager::WriteText(const fs::path& filePath, const std::string& text)
     return contentIO->WriteText(filePath, text);
 }
 
+bool FileIOManager::Exists(const std::filesystem::path& path) const{
+    return pathHandler->CheckPath(path);
+}
+
 fs::path FileIOManager::CurrentPath(){
     return pathHandler->GetCurrentPath();
 }
 
 bool FileIOManager::CD(const std::string& target){
     return pathHandler->CD(target);
+}
+
+fs::path FileIOManager::BesideExecutable(const std::filesystem::path& relative) const{
+    return pathHandler->BesideExecutable(relative);
 }

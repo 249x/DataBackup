@@ -2,6 +2,7 @@
 
 #include "Filter.h"
 
+#include <chrono>
 #include <cstddef>
 #include <ctime>
 #include <string>
@@ -56,8 +57,16 @@ private:
 	static bool DigitsAt(const std::string& text, std::size_t at, std::size_t count, int& out);
 	// "YYYY-MM-DD" / "YYYY-MM-DDThh:mm[:ss]" -> 本地时间的日历分量
 	static bool ParseDate(const std::string& text, std::tm& out);
+	// 两个时钟的基准对（首次使用时采样一次）：解析与还原共用同一对，文本才能精确往返
+	struct Anchor {
+		std::chrono::system_clock::time_point system;
+		FileTime file;
+	};
+	static const Anchor& TimeAnchor();
 	// 本地日历时间 -> FileTime（用一次性采样的时钟基准对换算）
 	static FileTime FromCalendar(const std::tm& tm);
+	// FileTime -> 本地时间文本 "YYYY-MM-DDThh:mm:ss"（与 ParsePoint 互为逆运算）
+	static std::string FormatPoint(FileTime when);
 	static bool ParsePoint(const std::string& text, FileTime& out);
 	// 字段名当关键字处理，大小写不敏感（与 type: 的名字一致）
 	static bool ParseField(const std::string& text, Field& field) noexcept;

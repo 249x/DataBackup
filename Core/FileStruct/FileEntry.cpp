@@ -54,19 +54,19 @@ FileEntry::SerializedData FileEntry::Serialize() const {
 	const FileMetaData::SerializedData metadataBytes = metadata.Serialize();
 	const auto& contentData = content;
 	SerializedData output;
-	std::size_t offset = 0;
-	SerializationUtils::WriteBytes(output, offset, metadataBytes);
-	SerializationUtils::WriteBytes(output, offset, contentData);
+	SerializationUtils io; // 每条记录一个游标
+	io.WriteBytes(output, metadataBytes);
+	io.WriteBytes(output, contentData);
 	return output;
 }
 
 bool FileEntry::Deserialize(const SerializedData& serialized) {
-	std::size_t offset = 0;
+	SerializationUtils io;
 	SerializedData metadataData;
 	SerializedData contentData;
-	if (!SerializationUtils::ReadBytes(serialized, offset, metadataData) ||
-		!SerializationUtils::ReadBytes(serialized, offset, contentData) ||
-		offset != serialized.size()) {
+	if (!io.ReadBytes(serialized, metadataData) ||
+		!io.ReadBytes(serialized, contentData) ||
+		io.Offset() != serialized.size()) {
 		return false;
 	}
 

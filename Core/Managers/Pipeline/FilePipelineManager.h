@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Manager.h"
+#include "../Save/ISaveData.h"
 #include "../../FileStruct/StructuredFileContent.h"
 #include "../../FileStruct/FileEntry.h"
 
@@ -9,7 +10,7 @@
 #include <stack>
 #include <vector>
 
-class FilePipelineManager : public Manager {
+class FilePipelineManager : public Manager, public ISaveData {
 public:
 	FilePipelineManager(System& sys);
 	~FilePipelineManager() override;
@@ -30,6 +31,11 @@ public:
 	std::uint16_t EncryptionType() const noexcept;
 
 	bool PrintSettings();
+
+	static constexpr std::uint32_t SaveIDValue = 1;
+	bool Save(std::vector<std::uint8_t>& data) override;
+	bool Load(const std::vector<std::uint8_t>& data) override;
+	std::uint32_t SaveID() const override;
 
 private:
 	void FilterEntries(std::vector<FileEntry>& entries);

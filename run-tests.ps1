@@ -114,17 +114,17 @@ $cases = @(
 
     @{ Name = '筛选：name:*.tmp（白名单，只备份 .tmp）'
        Cmds = @('set-encrypt false 0', 'add-filter name:*.tmp',
-                'backup src c7.db', 'restore c7.db r7', 'remove-filter 1')
+                'backup src c7.db', 'restore c7.db r7')
        Dir = 'r7'; Expect = @('b.tmp', 'sub\e.tmp') }
 
     @{ Name = '筛选：and:(type:regular;size:max=1k)'
        Cmds = @('add-filter and:(type:regular;size:max=1k)',
-                'backup src c8.db', 'restore c8.db r8', 'remove-filter 2')
+                'backup src c8.db', 'restore c8.db r8')
        Dir = 'r8'; Expect = @('a.txt', 'b.tmp', 'c.log', 'sub\d.txt', 'sub\e.tmp') }
 
     @{ Name = '筛选：not:(name:*.tmp)'
        Cmds = @('add-filter not:(name:*.tmp)',
-                'backup src c9.db', 'restore c9.db r9', 'remove-filter 3')
+                'backup src c9.db', 'restore c9.db r9')
        Dir = 'r9'; Expect = @('a.txt', 'big.bin', 'c.log', 'sub\d.txt') }
 )
 
@@ -136,9 +136,14 @@ foreach ($case in $cases) {
     # 还原目标目录必须先清掉：restore 是"往目录里写"，不会删除上一次的残留
     $target = Join-Path $Work $case.Dir
     if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+    # 筛选条件会跨进程存进 save.dat，所以每个用例开始前先清空：否则上一轮的残留条件会
+    # 影响本用例的期望结果。用 clear-filters 而不是 remove-filter <编号>——编号是顺次
+    # 分配的（删除也不复用），写死编号在存档里已有条件时就会错位。
+    $script.Add('clear-filters')
     $script.AddRange([string[]]$case.Cmds)
 }
 
+$script.Add('clear-filters')  # 跑完不留残余条件（存档下次还会被读回来）
 $script.Add('quit')
 $output = Invoke-App ($script -join "`n")
 
@@ -221,10 +226,12 @@ $badCmds = @(
     'set-encrypt true 1'
     'backup src c_nokey.db'
     'set-encrypt false 0'
-    'add-filter name:绝不存在'
+    # 用 ASCII 的"肯定匹配不到"的规格：中文经管道会被终端按 GBK 编码，程序按 UTF-8 解释
+    # 会得到一串 '?'（两个字的通配符），既靠运气又不好读
+    'add-filter name:__no_such_file__*'
     'backup src c_empty.db'
-    'remove-filter 1'
     'remove-filter 99'
+    'clear-filters'
     'quit'
 )
 $badScript = New-Object System.Collections.Generic.List[string]

@@ -8,6 +8,7 @@
 #include "../Filter/FilterManager.h"
 
 #include "../../General/Debug.h"
+#include "../../General/SerializationUtils.h"
 
 #include <algorithm>
 #include <iostream>
@@ -28,7 +29,6 @@ void FilePipelineManager::Initialize(){
 
     command->RegisterCommand("settings", "Print backup settings", PrintSettings, this);
 
-    // 三个开关是整条流水线的设置，所以也由流水线注册命令（名字与原来保持一致）
     command->RegisterCommand("set-archive", "Enable/disable packing in backup",
                              SetArchive, this);
     command->RegisterCommand("set-compress", "Set compression: <enable> <algorithm>",
@@ -37,7 +37,6 @@ void FilePipelineManager::Initialize(){
                              SetEncryption, this);
 }
 
-// 打包没有可失败的地方：关掉时 Backup 里那一步整段跳过
 bool FilePipelineManager::SetArchive(bool enabled){
     archiveEnabled = enabled;
     return true;
@@ -84,6 +83,50 @@ std::uint16_t FilePipelineManager::CompressionType() const noexcept{
 
 std::uint16_t FilePipelineManager::EncryptionType() const noexcept{
     return encryptionType;
+}
+
+bool FilePipelineManager::Save(std::vector<std::uint8_t>& data){
+    data.clear();
+    SerializationUtils io;
+
+    const bool ok =
+        io.WriteUnsigned(data, static_cast<std::uint8_t>(archiveEnabled ? 1 : 0)) &&
+        io.WriteUnsigned(data, static_cast<std::uint8_t>(compressionEnabled ? 1 : 0)) &&
+        io.WriteUnsigned(data, compressionType) &&
+        io.WriteUnsigned(data, static_cast<std::uint8_t>(encryptionEnabled ? 1 : 0)) &&
+        io.WriteUnsigned(data, encryptionType);
+    if (!ok){
+        Debug::Error("Failed to serialize pipeline settings", "Pipeline");
+        return false;
+    }
+    return true;
+}
+
+bool FilePipelineManager::Load(const std::vector<std::uint8_t>& data){
+    SerializationUtils io;
+    std::uint8_t archive = 0;
+    std::uint8_t compression = 0;
+    std::uint8_t encryption = 0;
+    std::uint16_t compressionId = 0;
+    std::uint16_t encryptionId = 0;
+
+    if (!io.ReadUnsigned(data, archive) ||
+        !io.ReadUnsigned(data, compression) ||
+        !io.ReadUnsigned(data, compressionId) ||
+        !io.ReadUnsigned(data, encryption) ||
+        !io.ReadUnsigned(data, encryptionId)){
+        Debug::Error("Saved pipeline settings are too short", "Pipeline");
+        return false;
+    }
+
+    SetArchive(archive != 0);
+    const bool compressionOk = SetCompression(compression != 0, compressionId);
+    const bool encryptionOk = SetEncryption(encryption != 0, encryptionId);
+    return compressionOk && encryptionOk;
+}
+
+std::uint32_t FilePipelineManager::SaveID() const{
+    return SaveIDValue;
 }
 
 bool FilePipelineManager::Backup(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath){

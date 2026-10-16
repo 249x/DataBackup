@@ -81,5 +81,21 @@ bool TypeFilter::Match(const FileMetaData& meta) const {
 }
 
 std::string TypeFilter::ToString() const {
-	return Name() + ":" + RawParameters();
+	// 位图 -> 类型名（按取值从小到大，输入里的重复与大小写差异自然被折掉）；
+	// 无效条目没有位图，留空（列表里会跟上 "(invalid: …)" 的标记）
+	std::string text;
+	for (unsigned bit = 0; bit < BitCount; ++bit) {
+		if ((mask & (1u << bit)) == 0) {
+			continue;
+		}
+		const char* typeName = FileTypeName(static_cast<FileType>(bit));
+		if (typeName == nullptr) {
+			continue;
+		}
+		if (!text.empty()) {
+			text += ' ';
+		}
+		text += typeName;
+	}
+	return Name() + ":" + text;
 }

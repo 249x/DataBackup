@@ -96,3 +96,22 @@ bool TextMatch::Split(const std::string& pattern, Shape& shape, std::string& hea
 	head = trimmed;
 	return true;
 }
+
+std::string TextMatch::Compose(Shape shape, std::string_view head, std::string_view tail) {
+	// 两端被掐掉的 '*' 只剩位置信息，按形状补回去即可
+	switch (shape) {
+	case Shape::Exact:
+		break;
+	case Shape::Prefix:
+		return std::string(head) + '*';
+	case Shape::Suffix:
+		return '*' + std::string(head);
+	case Shape::Contains:
+		return '*' + std::string(head) + '*';
+	case Shape::Affix:
+		return std::string(head) + '*' + std::string(tail);
+	case Shape::Glob:
+		break; // head 本来就是整条模式串（含 '*' '?'），原样返回
+	}
+	return std::string(head);
+}

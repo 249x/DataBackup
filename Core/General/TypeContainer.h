@@ -1,10 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <typeindex>
+#include <unordered_map>
+#include <vector>
 
 template <typename T>
 class TypeContainer {
@@ -25,6 +27,7 @@ public:
         auto ptr = std::make_unique<U>(std::forward<Args>(args)...);
         U* ref = ptr.get();
         objectsMap.emplace(key, std::move(ptr));
+        order.push_back(ref);
         return ref;
     }
 
@@ -51,19 +54,30 @@ public:
 
     template <typename U>
     bool Remove() {
-        return objectsMap.erase(std::type_index(typeid(U))) > 0;
+        auto it = objectsMap.find(std::type_index(typeid(U)));
+        if (it == objectsMap.end()) {
+            return false;
+        }
+        T* ref = it->second.get();
+        objectsMap.erase(it);
+        order.erase(std::remove(order.begin(), order.end(), ref), order.end());
+        return true;
     }
 
-    void Clear() { objectsMap.clear(); }
+    void Clear() {
+        objectsMap.clear();
+        order.clear();
+    }
     std::size_t Size() const { return objectsMap.size(); }
 
     template <typename Func>
     void ForEach(Func&& func) {
-        for (auto& [key, ptr] : objectsMap) {
-            func(ptr.get());
+        for (T* obj : order) {
+            func(obj);
         }
     }
 
 private:
     std::unordered_map<std::type_index, std::unique_ptr<T>> objectsMap;
+    std::vector<T*> order;
 };

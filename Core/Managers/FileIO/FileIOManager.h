@@ -31,8 +31,10 @@ public:
     bool ReadText(const std::filesystem::path& filePath, std::string& text) const;
     bool WriteText(const std::filesystem::path& filePath, const std::string& text) const;
 
+    bool Exists(const std::filesystem::path& path) const;
     std::filesystem::path CurrentPath();
     bool CD(const std::string& target);
+    std::filesystem::path BesideExecutable(const std::filesystem::path& relative) const;
 private:
     std::unique_ptr<FileContentIO> contentIO;
     std::unique_ptr<FileMetaDataIO> metadataIO;

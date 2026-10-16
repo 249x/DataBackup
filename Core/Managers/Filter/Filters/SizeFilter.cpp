@@ -202,6 +202,36 @@ bool SizeFilter::Match(const FileMetaData& meta) const {
 	return true;
 }
 
+std::string SizeFilter::FormatSize(std::uintmax_t value) {
+	struct Unit {
+		std::uintmax_t scale;
+		const char* suffix;
+	};
+	static constexpr Unit units[] = {
+	    {1024ull * 1024ull * 1024ull, "G"},
+	    {1024ull * 1024ull, "M"},
+	    {1024ull, "K"},
+	};
+	for (const Unit& unit : units) {
+		if (value >= unit.scale && value % unit.scale == 0) {
+			return std::to_string(value / unit.scale) + unit.suffix;
+		}
+	}
+	return std::to_string(value);
+}
+
 std::string SizeFilter::ToString() const {
-	return Name() + ":" + RawParameters();
+	// 上下界还原成 min= / max=（两端相等就是"恰好这个大小"）。原来的 "=0" / "1M..2M"
+	// 与这里的写法语义相同，解析回去得到同一对上下界
+	std::string text;
+	if (hasMin) {
+		text += "min=" + FormatSize(lower);
+	}
+	if (hasMax) {
+		if (!text.empty()) {
+			text += ' ';
+		}
+		text += "max=" + FormatSize(upper);
+	}
+	return Name() + ":" + text;
 }

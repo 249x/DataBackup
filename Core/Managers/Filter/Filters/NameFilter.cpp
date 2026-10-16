@@ -1,6 +1,7 @@
 #include "NameFilter.h"
 
 #include "../../../General/Debug.h"
+#include "../../../General/Utf8.h"
 
 #include <cstddef>
 #include <utility>
@@ -45,5 +46,8 @@ NameFilter::NativeView NameFilter::LastComponent(const std::filesystem::path& pa
 }
 
 std::string NameFilter::ToString() const {
-	return Name() + ":" + RawParameters();
+	// 参数文本由"形状 + 字面串"还原（基类不再存原文）。字面串存的是 path 的原生字符
+	// （Windows 上是 UTF-16），拼串前转回 UTF-8；小写化是解析时做的，所以还原出来是小写形式
+	return Name() + ":" + TextMatch::Compose(shape, Utf8::FromPath(std::filesystem::path(head)),
+	                                         Utf8::FromPath(std::filesystem::path(tail)));
 }

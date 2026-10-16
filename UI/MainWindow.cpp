@@ -31,6 +31,9 @@
 #include <QThread>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QVariant>
+
+#include <cstdint>
 
 namespace {
 
@@ -49,6 +52,14 @@ QString StartDir(const QLineEdit* edit) {
         }
     }
     return QDir::homePath();
+}
+
+// 按算法编号选中下拉框里的对应项
+void SelectAlgorithm(QComboBox* combo, std::uint16_t id) {
+    const int index = combo->findData(QVariant::fromValue(id));
+    if (index >= 0) {
+        combo->setCurrentIndex(index);
+    }
 }
 
 // 一行「输入框 + 浏览按钮」
@@ -237,7 +248,6 @@ QWidget* MainWindow::BuildBackupTab() {
     optGrid->setHorizontalSpacing(12);
 
     optArchive = new QCheckBox(QStringLiteral("打包：把整棵目录树拼成单个归档文件"), optBox);
-    optArchive->setChecked(true); // 与流水线的默认值一致
     optGrid->addWidget(optArchive, 0, 0, 1, 3);
 
     optCompress = new QCheckBox(QStringLiteral("压缩"), optBox);
@@ -325,11 +335,19 @@ QWidget* MainWindow::BuildBackupTab() {
     root->addStretch(1);
 
     connect(backupRun, &QPushButton::clicked, this, [this] { StartBackup(); });
-    connect(optArchive, &QCheckBox::toggled, this, [this] { RefreshSettingsPreview(); });
-    connect(optCompress, &QCheckBox::toggled, this, [this] { RefreshSettingsPreview(); });
-    connect(optEncrypt, &QCheckBox::toggled, this, [this] { RefreshSettingsPreview(); });
-    connect(compressAlgo, &QComboBox::currentIndexChanged, this, [this] { RefreshSettingsPreview(); });
-    connect(encryptAlgo, &QComboBox::currentIndexChanged, this, [this] { RefreshSettingsPreview(); });
+
+    // 改一下就刷新预览、并立刻推给流水线：存档只在退出时写一次，所以不同步的话
+    // "勾了压缩摆着不用"这种改动就白改了。这个 lambda 不接参数，能同时接
+    // toggled(bool) 与 currentIndexChanged(int) 两种信号。
+    const auto onChanged = [this] {
+        RefreshSettingsPreview();
+        SyncSettingsToBackend();
+    };
+    connect(optArchive, &QCheckBox::toggled, this, onChanged);
+    connect(optCompress, &QCheckBox::toggled, this, onChanged);
+    connect(optEncrypt, &QCheckBox::toggled, this, onChanged);
+    connect(compressAlgo, &QComboBox::currentIndexChanged, this, onChanged);
+    connect(encryptAlgo, &QComboBox::currentIndexChanged, this, onChanged);
     connect(keySource, &QComboBox::currentIndexChanged, this, [this](int index) {
         keyEdit->setEchoMode(index == 0 ? QLineEdit::Normal : QLineEdit::Password);
         keyEdit->setText(QString());
@@ -338,6 +356,25 @@ QWidget* MainWindow::BuildBackupTab() {
                                         : QStringLiteral("输入口令，界面会用 SHA-256 派生密钥"));
         RefreshSettingsPreview();
     });
+
+    // ---- 控件的初始值取自流水线，而不是写死的默认值 ----
+    // 流水线的设置可能在 Manager 初始化时刚从存档（save.dat）里读回来，所以必须问它：
+    // 写死默认值的话存档等于白读，而且第一次点「备份」时 ApplySettingsToBackend
+    // 还会把界面上这些默认值推回流水线，把刚加载进来的设置覆盖掉。
+    //
+    // 下面这几句 setChecked / SelectAlgorithm 会触发 onChanged 信号，而每个控件是**一个
+    // 一个**同步的：如果不挡住，第一个控件同步完就会把"整份界面状态"推回流水线，
+    // 此刻还没同步到的控件还是默认值，于是压缩算法被改回列表第一项、加密整个被关掉，
+    // 退出时又把这个被改坏的状态存进存档——读档等于白读。所以整段用守卫包起来。
+    syncingSettings = true;
+    if (auto* pipeline = sys.Get<FilePipelineManager>(); pipeline != nullptr) {
+        optArchive->setChecked(pipeline->ArchiveEnabled());
+        optCompress->setChecked(pipeline->CompressionEnabled());
+        SelectAlgorithm(compressAlgo, pipeline->CompressionType());
+        optEncrypt->setChecked(pipeline->EncryptionEnabled());
+        SelectAlgorithm(encryptAlgo, pipeline->EncryptionType());
+    }
+    syncingSettings = false;
 
     return page;
 }
@@ -570,10 +607,9 @@ QWidget* MainWindow::BuildLogTab() {
 
 // ---------------------------------------------------------------- 内核调用
 
-bool MainWindow::ApplySettingsToBackend(QString& error) {
+bool MainWindow::PushSettings(QString& error) {
     auto* pipeline = sys.Get<FilePipelineManager>();
-    auto* encryption = sys.Get<EncryptionManager>();
-    if (pipeline == nullptr || encryption == nullptr) {
+    if (pipeline == nullptr) {
         error = QStringLiteral("内核 Manager 未初始化。");
         return false;
     }
@@ -592,7 +628,33 @@ bool MainWindow::ApplySettingsToBackend(QString& error) {
         error = QStringLiteral("加密算法无效。");
         return false;
     }
+    return true;
+}
 
+void MainWindow::SyncSettingsToBackend() {
+    if (syncingSettings) {
+        return; // 正在把存档值往控件里灌，此时控件上的值还没同步齐，不能反着推回去
+    }
+
+    QString error;
+    if (PushSettings(error)) {
+        return;
+    }
+    // 正常点界面走不到这里（下拉框里的编号都是内核给的清单），真出事也别弹窗骚扰：
+    statusBar()->showMessage(QStringLiteral("设置未同步到内核：") + error, 8000);
+}
+
+bool MainWindow::ApplySettingsToBackend(QString& error) {
+    auto* encryption = sys.Get<EncryptionManager>();
+    if (encryption == nullptr) {
+        error = QStringLiteral("内核 Manager 未初始化。");
+        return false;
+    }
+    if (!PushSettings(error)) {
+        return false;
+    }
+
+    const auto encryptId = static_cast<unsigned short>(encryptAlgo->currentData().toUInt());
     if (optEncrypt->isChecked() &&
         !LoadKey(keySource, keyEdit, encryptId, error)) {
         return false;

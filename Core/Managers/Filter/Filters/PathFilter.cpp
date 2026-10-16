@@ -1,6 +1,7 @@
 #include "PathFilter.h"
 
 #include "../../../General/Debug.h"
+#include "../../../General/Utf8.h"
 
 #include <filesystem>
 #include <utility>
@@ -36,5 +37,7 @@ bool PathFilter::Match(const FileMetaData& meta) const {
 }
 
 std::string PathFilter::ToString() const {
-	return Name() + ":" + RawParameters();
+	// 与 NameFilter 同一套路：形状 + 字面串拼回去，字面串从原生字符转回 UTF-8
+	return Name() + ":" + TextMatch::Compose(shape, Utf8::FromPath(std::filesystem::path(head)),
+	                                         Utf8::FromPath(std::filesystem::path(tail)));
 }

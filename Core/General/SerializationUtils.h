@@ -7,13 +7,24 @@
 #include <type_traits>
 #include <vector>
 
+/*
+ * 序列化 / 反序列化小工具。
+ *
+ * 游标（offset）由对象自己管：**一次序列化用一个实例**，从头往后走，调用点不用再
+ * 声明 `std::size_t offset = 0;` 并把它传给每一次调用。
+ * 要复用同一个实例从头再来一遍，调用 Reset()；需要知道当前位置或用它做
+ * “刚好读完”的校验时用 Offset()。
+ */
 class SerializationUtils {
 public:
 	using SerializedData = std::vector<std::uint8_t>;
 	static constexpr std::uint64_t MaxFieldSize = 1ULL << 40;
 
+	void Reset() noexcept { offset = 0; }
+	std::size_t Offset() const noexcept { return offset; }
+
 	template <typename T>
-	static bool WriteUnsigned(SerializedData& output, std::size_t& offset, T value) {
+	bool WriteUnsigned(SerializedData& output, T value) {
 		static_assert(std::is_unsigned_v<T>);
 		if (offset > output.max_size() || sizeof(T) > output.max_size() - offset) {
 			return false;
@@ -28,7 +39,7 @@ public:
 	}
 
 	template <typename T>
-	static bool ReadUnsigned(const SerializedData& input, std::size_t& offset, T& value) {
+	bool ReadUnsigned(const SerializedData& input, T& value) {
 		static_assert(std::is_unsigned_v<T>);
 		if (offset > input.size() || input.size() - offset < sizeof(T)) {
 			return false;
@@ -63,13 +74,16 @@ public:
 		return true;
 	}
 
-	static bool WriteString(SerializedData& output, std::size_t& offset, const std::string& value);
-	static bool ReadString(const SerializedData& input, std::size_t& offset, std::string& value);
-	static bool WriteBytes(SerializedData& output, std::size_t& offset, const SerializedData& data);
-	static bool ReadBytes(const SerializedData& input, std::size_t& offset, SerializedData& output);
-	static bool WriteBytes(SerializedData& output, std::size_t& offset, const std::size_t size, const SerializedData& data);
-	static bool ReadBytes(const SerializedData& input, std::size_t& offset, const std::size_t size, SerializedData& output);
+	bool WriteString(SerializedData& output, const std::string& value);
+	bool ReadString(const SerializedData& input, std::string& value);
+	bool WriteBytes(SerializedData& output, const SerializedData& data);
+	bool ReadBytes(const SerializedData& input, SerializedData& output);
+	bool WriteBytes(SerializedData& output, const std::size_t size, const SerializedData& data);
+	bool ReadBytes(const SerializedData& input, const std::size_t size, SerializedData& output);
 
 	static bool WriteBytes(std::ostream& output, const std::uint8_t* data, std::uint64_t size);
 	static bool ReadBytes(std::istream& input, SerializedData& data, std::uint64_t size);
+
+private:
+	std::size_t offset = 0;
 };

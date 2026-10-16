@@ -120,84 +120,84 @@ void FileMetaData::SetFileId(std::uint64_t id) noexcept {
 
 FileMetaData::SerializedData FileMetaData::Serialize() const {
 	SerializedData output;
-	std::size_t offset = 0;
+	SerializationUtils io;
 
-	SerializationUtils::WriteUnsigned<std::uint32_t>(output, offset, SerializationVersion);
-	SerializationUtils::WriteString(output, offset, Utf8::FromPath(relativePath));
-	SerializationUtils::WriteString(output, offset, owner);
-	SerializationUtils::WriteString(output, offset, group);
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, ownerId);
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, groupId);
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset,
+	io.WriteUnsigned<std::uint32_t>(output, SerializationVersion);
+	io.WriteString(output, Utf8::FromPath(relativePath));
+	io.WriteString(output, owner);
+	io.WriteString(output, group);
+	io.WriteUnsigned<std::uint64_t>(output, ownerId);
+	io.WriteUnsigned<std::uint64_t>(output, groupId);
+	io.WriteUnsigned<std::uint64_t>(output,
 		static_cast<std::uint64_t>(lastWriteTime.time_since_epoch().count()));
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset,
+	io.WriteUnsigned<std::uint64_t>(output,
 		static_cast<std::uint64_t>(lastAccessTime.time_since_epoch().count()));
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset,
+	io.WriteUnsigned<std::uint64_t>(output,
 		static_cast<std::uint64_t>(creationTime.time_since_epoch().count()));
-	SerializationUtils::WriteUnsigned<std::uint32_t>(output, offset,
+	io.WriteUnsigned<std::uint32_t>(output,
 		static_cast<std::uint32_t>(permissions));
-	SerializationUtils::WriteUnsigned<std::uint8_t>(output, offset,
+	io.WriteUnsigned<std::uint8_t>(output,
 		static_cast<std::uint8_t>(type));
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, static_cast<std::uint64_t>(size));
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, static_cast<std::uint64_t>(hardLinkCount));
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, deviceId);
-	SerializationUtils::WriteUnsigned<std::uint64_t>(output, offset, fileId);
+	io.WriteUnsigned<std::uint64_t>(output, static_cast<std::uint64_t>(size));
+	io.WriteUnsigned<std::uint64_t>(output, static_cast<std::uint64_t>(hardLinkCount));
+	io.WriteUnsigned<std::uint64_t>(output, deviceId);
+	io.WriteUnsigned<std::uint64_t>(output, fileId);
 	return output;
 }
 
 bool FileMetaData::Deserialize(const SerializedData& serialized) {
-	std::size_t offset = 0;
+	SerializationUtils io;
 	std::uint32_t version = 0;
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, version) ||
+	if (!io.ReadUnsigned(serialized, version) ||
 		version != SerializationVersion) {
 		return false;
 	}
 
 	FileMetaData result;
 	std::string relativePath;
-	if (!SerializationUtils::ReadString(serialized, offset, relativePath) ||
-		!SerializationUtils::ReadString(serialized, offset, result.owner) ||
-		!SerializationUtils::ReadString(serialized, offset, result.group) ||
-		!SerializationUtils::ReadUnsigned(serialized, offset, result.ownerId) ||
-		!SerializationUtils::ReadUnsigned(serialized, offset, result.groupId)) {
+	if (!io.ReadString(serialized, relativePath) ||
+		!io.ReadString(serialized, result.owner) ||
+		!io.ReadString(serialized, result.group) ||
+		!io.ReadUnsigned(serialized, result.ownerId) ||
+		!io.ReadUnsigned(serialized, result.groupId)) {
 		return false;
 	}
 
 	std::uint64_t timeValue = 0;
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, timeValue)) {
+	if (!io.ReadUnsigned(serialized, timeValue)) {
 		return false;
 	}
 	result.lastWriteTime = FileTime(FileTime::duration(
 		static_cast<FileTime::duration::rep>(timeValue)));
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, timeValue)) {
+	if (!io.ReadUnsigned(serialized, timeValue)) {
 		return false;
 	}
 	result.lastAccessTime = FileTime(FileTime::duration(
 		static_cast<FileTime::duration::rep>(timeValue)));
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, timeValue)) {
+	if (!io.ReadUnsigned(serialized, timeValue)) {
 		return false;
 	}
 	result.creationTime = FileTime(FileTime::duration(
 		static_cast<FileTime::duration::rep>(timeValue)));
 
 	std::uint32_t enumValue = 0;
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, enumValue)) {
+	if (!io.ReadUnsigned(serialized, enumValue)) {
 		return false;
 	}
 	result.permissions = static_cast<Permissions>(enumValue);
 
 	std::uint8_t typeValue = 0;
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, typeValue) ||
+	if (!io.ReadUnsigned(serialized, typeValue) ||
 		!IsValidFileTypeValue(typeValue)) {
 		return false;
 	}
 	result.type = static_cast<FileType>(typeValue);
 
-	if (!SerializationUtils::ReadUnsigned(serialized, offset, result.size) ||
-		!SerializationUtils::ReadUnsigned(serialized, offset, result.hardLinkCount) ||
-		!SerializationUtils::ReadUnsigned(serialized, offset, result.deviceId) ||
-		!SerializationUtils::ReadUnsigned(serialized, offset, result.fileId) ||
-		offset != serialized.size()) {
+	if (!io.ReadUnsigned(serialized, result.size) ||
+		!io.ReadUnsigned(serialized, result.hardLinkCount) ||
+		!io.ReadUnsigned(serialized, result.deviceId) ||
+		!io.ReadUnsigned(serialized, result.fileId) ||
+		io.Offset() != serialized.size()) {
 		return false;
 	}
 

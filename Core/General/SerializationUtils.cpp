@@ -3,14 +3,13 @@
 #include <algorithm>
 #include <limits>
 
-bool SerializationUtils::WriteString(SerializedData& output, std::size_t& offset,
-                                     const std::string& value) {
+bool SerializationUtils::WriteString(SerializedData& output, const std::string& value) {
 	if (value.size() > MaxFieldSize ||
 		value.size() > std::numeric_limits<std::uint64_t>::max()) {
 		return false;
 	}
-	if (!WriteUnsigned<std::uint64_t>(
-			output, offset, static_cast<std::uint64_t>(value.size()))) {
+	if (!WriteUnsigned<std::uint64_t>(output,
+			static_cast<std::uint64_t>(value.size()))) {
 		return false;
 	}
 	if (offset > output.max_size() || value.size() > output.max_size() - offset) {
@@ -24,11 +23,9 @@ bool SerializationUtils::WriteString(SerializedData& output, std::size_t& offset
 	return true;
 }
 
-bool SerializationUtils::WriteBytes(SerializedData& output, std::size_t& offset,
-                                    const SerializedData& data) {
+bool SerializationUtils::WriteBytes(SerializedData& output, const SerializedData& data) {
 	if (data.size() > MaxFieldSize ||
-		!WriteUnsigned<std::uint64_t>(output, offset,
-			static_cast<std::uint64_t>(data.size()))) {
+		!WriteUnsigned<std::uint64_t>(output, static_cast<std::uint64_t>(data.size()))) {
 		return false;
 	}
 	if (offset > output.max_size() || data.size() > output.max_size() - offset) {
@@ -42,10 +39,9 @@ bool SerializationUtils::WriteBytes(SerializedData& output, std::size_t& offset,
 	return true;
 }
 
-bool SerializationUtils::ReadString(const SerializedData& input,
-                                    std::size_t& offset, std::string& value) {
+bool SerializationUtils::ReadString(const SerializedData& input, std::string& value) {
 	std::uint64_t size = 0;
-	if (!ReadUnsigned(input, offset, size) ||
+	if (!ReadUnsigned(input, size) ||
 		size > MaxFieldSize || size > input.size() - offset ||
 		size > std::string().max_size()) {
 		return false;
@@ -57,10 +53,9 @@ bool SerializationUtils::ReadString(const SerializedData& input,
 	return true;
 }
 
-bool SerializationUtils::ReadBytes(const SerializedData& input,
-                                   std::size_t& offset, SerializedData& output) {
+bool SerializationUtils::ReadBytes(const SerializedData& input, SerializedData& output) {
 	std::uint64_t size = 0;
-	if (!ReadUnsigned(input, offset, size) ||
+	if (!ReadUnsigned(input, size) ||
 		size > MaxFieldSize || size > input.size() - offset) {
 		return false;
 	}
@@ -99,12 +94,11 @@ bool SerializationUtils::ReadBytes(std::istream& input, SerializedData& data,
 	return input.good();
 }
 
-bool SerializationUtils::WriteBytes(SerializedData& output, std::size_t& offset,
+bool SerializationUtils::WriteBytes(SerializedData& output,
 									const std::size_t size, const SerializedData& data) {
 	if (size > MaxFieldSize ||
 		size > std::numeric_limits<std::uint64_t>::max() ||
-		!WriteUnsigned<std::uint64_t>(output, offset,
-			static_cast<std::uint64_t>(size))) {
+		!WriteUnsigned<std::uint64_t>(output, static_cast<std::uint64_t>(size))) {
 		return false;
 	}
 	if (offset > output.max_size() || size > output.max_size() - offset) {
@@ -118,10 +112,10 @@ bool SerializationUtils::WriteBytes(SerializedData& output, std::size_t& offset,
 	return true;
 }
 
-bool SerializationUtils::ReadBytes(const SerializedData& input, std::size_t& offset,
+bool SerializationUtils::ReadBytes(const SerializedData& input,
 								   const std::size_t size, SerializedData& output) {
 	std::uint64_t readSize = 0;
-	if (!ReadUnsigned(input, offset, readSize) ||
+	if (!ReadUnsigned(input, readSize) ||
 		readSize > MaxFieldSize || readSize > input.size() - offset ||
 		readSize > std::numeric_limits<std::size_t>::max() ||
 		readSize != size) {

@@ -37,7 +37,7 @@ bool ArchiveManager::Pack(const std::vector<FileEntry>& entries,
 	archive.clear();
 	 
 	std::unordered_set<std::string> paths;
-	std::size_t offset = 0;
+	SerializationUtils io; // archive 自己的游标；entry.Serialize() 内部另有游标，互不干扰
 	for (const FileEntry& entry : entries) {
 		const std::filesystem::path& relativePath = entry.Path();
 		if (!IsSafeRelativePath(relativePath)) {
@@ -49,7 +49,7 @@ bool ArchiveManager::Pack(const std::vector<FileEntry>& entries,
 		}
 
 		const FileEntry::SerializedData serializedEntry = entry.Serialize();
-		if (!SerializationUtils::WriteBytes(archive, offset, serializedEntry)) {
+		if (!io.WriteBytes(archive, serializedEntry)) {
 			return false;
 		}
 	}
@@ -63,11 +63,11 @@ bool ArchiveManager::Unpack(const std::vector<uint8_t>& archive,
                             std::vector<FileEntry>& entries) const {
     entries.clear();
 	std::unordered_set<std::string> paths;
-	std::size_t offset = 0;
+	SerializationUtils io;
 
 	for (std::uint32_t index = 0; index < fileCount; ++index) {
 		FileEntry::SerializedData serializedEntry;
-		if (!SerializationUtils::ReadBytes(archive, offset, serializedEntry)) {
+		if (!io.ReadBytes(archive, serializedEntry)) {
 			return false;
 		}
 

@@ -29,11 +29,11 @@ void StructuredFileContent::SetData(std::vector<std::uint8_t>& data) {
 
 bool StructuredFileContent::Serialize(std::vector<uint8_t>& output) {
     output.clear();
-    std::size_t offset = 0;
-    if (!SerializeHeader(output, offset)) {
+    SerializationUtils io;
+    if (!SerializeHeader(output, io)) {
         return false;
     }
-    if (offset > output.max_size() || data.size() > output.max_size() - offset) {
+    if (io.Offset() > output.max_size() || data.size() > output.max_size() - io.Offset()) {
         return false;
     }
     output.insert(output.end(), data.begin(), data.end());
@@ -41,12 +41,12 @@ bool StructuredFileContent::Serialize(std::vector<uint8_t>& output) {
 }
 
 bool StructuredFileContent::Deserialize(const std::vector<uint8_t>& input) {
-    std::size_t offset = 0;
-    if (!DeserializeHeader(input, offset)) {
+    SerializationUtils io;
+    if (!DeserializeHeader(input, io)) {
         return false;
     }
-    data.assign(input.begin() + static_cast<std::ptrdiff_t>(offset),
-                input.begin() + static_cast<std::ptrdiff_t>(offset + data.size()));
+    data.assign(input.begin() + static_cast<std::ptrdiff_t>(io.Offset()),
+                input.begin() + static_cast<std::ptrdiff_t>(io.Offset() + data.size()));
     return true;
 }
 
@@ -82,30 +82,30 @@ std::uint16_t StructuredFileContent::GetHeaderSizeBytes() {
     return sizeof(std::uint16_t) * 4 + sizeof(std::uint32_t);
 }
 
-bool StructuredFileContent::SerializeHeader(std::vector<std::uint8_t>& data, std::size_t& offset) {
+bool StructuredFileContent::SerializeHeader(std::vector<std::uint8_t>& data, SerializationUtils& io) {
     if (this->data.size() > std::numeric_limits<std::uint32_t>::max()) {
         return false;
     }
-    if (!SerializationUtils::WriteUnsigned(data, offset, GetMagic()) ||
-        !SerializationUtils::WriteUnsigned(data, offset, GetVersion()) ||
-        !SerializationUtils::WriteUnsigned(data, offset, operation) ||
-        !SerializationUtils::WriteUnsigned(data, offset, custom) ||
-        !SerializationUtils::WriteUnsigned(data, offset, static_cast<std::uint32_t>(this->data.size()))) {
+    if (!io.WriteUnsigned(data, GetMagic()) ||
+        !io.WriteUnsigned(data, GetVersion()) ||
+        !io.WriteUnsigned(data, operation) ||
+        !io.WriteUnsigned(data, custom) ||
+        !io.WriteUnsigned(data, static_cast<std::uint32_t>(this->data.size()))) {
         return false;
     }
     return true;
 }
 
-bool StructuredFileContent::DeserializeHeader(const std::vector<std::uint8_t>& data, std::size_t& offset) {
+bool StructuredFileContent::DeserializeHeader(const std::vector<std::uint8_t>& data, SerializationUtils& io) {
     std::uint16_t magic = 0;
     std::uint16_t version = 0;
     std::uint32_t size = 0;
 
-    if (!SerializationUtils::ReadUnsigned(data, offset, magic) ||
-        !SerializationUtils::ReadUnsigned(data, offset, version) ||
-        !SerializationUtils::ReadUnsigned(data, offset, operation) ||
-        !SerializationUtils::ReadUnsigned(data, offset, custom) ||
-        !SerializationUtils::ReadUnsigned(data, offset, size)) {
+    if (!io.ReadUnsigned(data, magic) ||
+        !io.ReadUnsigned(data, version) ||
+        !io.ReadUnsigned(data, operation) ||
+        !io.ReadUnsigned(data, custom) ||
+        !io.ReadUnsigned(data, size)) {
         return false;
     }
 
@@ -114,8 +114,8 @@ bool StructuredFileContent::DeserializeHeader(const std::vector<std::uint8_t>& d
     }
 
     if (size > SerializationUtils::MaxFieldSize ||
-        offset > data.size() ||
-        size > data.size() - offset) {
+        io.Offset() > data.size() ||
+        size > data.size() - io.Offset()) {
             return false;
         }
     this->data.resize(size);

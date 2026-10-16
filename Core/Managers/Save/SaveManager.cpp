@@ -1,23 +1,36 @@
 #include "SaveManager.h"
 #include "../FileIO/FileIOManager.h"
-#include "../../General/PathUtils.h"
 #include "../../General/SerializationUtils.h"
 #include "../../General/Utf8.h"
 #include "../../General/Debug.h"
 
 SaveManager::SaveManager(System& sys) : Manager(sys) {}
 
-// 存档放在可执行文件旁边：免得“从哪个目录启动”变成行为的一部分
-std::filesystem::path SaveManager::SaveFilePath() const{
-    return PathUtils::BesideExecutable(SavePath);
+std::filesystem::path SaveManager::SaveFilePath(){
+    FileIOManager* IO = Get<FileIOManager>();
+    return IO != nullptr ? IO->BesideExecutable(SavePath) : std::filesystem::path(SavePath);
 }
 
 void SaveManager::Initialize(){
     CollectSaveData();
+    if (IsSaveFileExists()) {
+        Load();
+    }
 }
 
 
 void SaveManager::OnDestroy(){
+    Save();
+}
+
+
+bool SaveManager::IsSaveFileExists(){
+    FileIOManager* IO = Get<FileIOManager>();
+    if (!IO){
+        Debug::Error("No file IO manager found", LogInfo);
+        return false;
+    }
+    return IO->Exists(SaveFilePath());
 }
 
 bool SaveManager::Save(){
@@ -28,7 +41,7 @@ bool SaveManager::Save(){
     }
 
     std::vector<std::uint8_t> saveData;
-    std::size_t offset = 0;
+    SerializationUtils io;
 
     const std::filesystem::path path = SaveFilePath();
 
@@ -38,8 +51,8 @@ bool SaveManager::Save(){
             Debug::Warning("Failed to save manager with ID: " + std::to_string(ID), LogInfo);
             continue;
         }
-        if(!SerializationUtils::WriteUnsigned(saveData, offset, ID) ||
-           !SerializationUtils::WriteBytes(saveData, offset, data)){
+        if(!io.WriteUnsigned(saveData, ID) ||
+           !io.WriteBytes(saveData, data)){
             Debug::Error("Failed to serialize save data", LogInfo);
             return false;
         }
@@ -62,12 +75,12 @@ bool SaveManager::Load(){
         return false;
     }
 
-    std::size_t offset = 0;
+    SerializationUtils io;
     std::uint32_t ID;
     std::vector<std::uint8_t> data;
 
-    while(SerializationUtils::ReadUnsigned(saveData, offset, ID)){
-        if(!SerializationUtils::ReadBytes(saveData, offset, data)){
+    while(io.ReadUnsigned(saveData, ID)){
+        if(!io.ReadBytes(saveData, data)){
             break;
         }
         auto it = saveManagers.find(ID);

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "../General/SerializationUtils.h"
+
 /*
 * 基本文件结构
 * uint16 magic; // 文件魔数
@@ -46,6 +48,6 @@ private:
     std::uint16_t operation;
     std::uint16_t custom;
 
-    bool SerializeHeader(std::vector<std::uint8_t>& data, std::size_t& offset);
-    bool DeserializeHeader(const std::vector<std::uint8_t>& data, std::size_t& offset);
+    bool SerializeHeader(std::vector<std::uint8_t>& data, SerializationUtils& io);
+    bool DeserializeHeader(const std::vector<std::uint8_t>& data, SerializationUtils& io);
 };
