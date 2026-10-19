@@ -1,6 +1,7 @@
 #include "CompressionManager.h"
 #include "Handler/HuffmanHandler.h"
 #include "Handler/RleHandler.h"
+#include "Handler/Lz77Handler.h"
 #include "../../General/Debug.h"
 
 #include <algorithm>
@@ -15,6 +16,7 @@ CompressionManager::~CompressionManager(){
 void CompressionManager::Initialize() {
     Register<HuffmanHandler>();
     Register<RleHandler>();
+    Register<Lz77Handler>();
 }
 
 bool CompressionManager::Compression(const std::vector<uint8_t>& input, std::uint16_t type, std::vector<uint8_t>& output) const{
@@ -60,7 +62,7 @@ std::vector<AlgorithmInfo> CompressionManager::Algorithms() const {
                                          pair.second->Description()});
         }
     }
-    // unordered_map 的遍历顺序不定，按编号排一下，界面下拉框的顺序才稳定
+
     std::sort(list.begin(), list.end(),
               [](const AlgorithmInfo& left, const AlgorithmInfo& right) {
                   return left.id < right.id;

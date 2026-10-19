@@ -100,6 +100,8 @@ public:
 
     bool RunConsole(const std::string& prompt = "> ");
     bool RunCommands(const std::filesystem::path& path);
+
+    static std::vector<std::string> CommandLineArguments(int argc, char* argv[]);
     
     void PrintCommands() const;
 

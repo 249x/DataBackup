@@ -10,6 +10,8 @@
       3. 对每个用例：备份 -> 还原 -> 逐文件比对 SHA256 和修改时间
       4. 打印 PASS/FAIL 汇总，退出码 0 表示全过
 
+  跑前会备份 app.exe 旁边的 save.dat，跑完再换回去，所以不会动你自己的设置与筛选条件。
+
   覆盖用例: 打包备份/还原、压缩(Huffman/RLE)、加密(AES/DES)、
             元数据(修改时间)保全、筛选(白名单语义)、异常输入健壮性
 #>
@@ -40,6 +42,15 @@ $Src  = Join-Path $Work 'src'
 
 if (-not (Test-Path -LiteralPath $App)) {
     throw "找不到 app.exe，请先在 $ProjectRoot 下执行 make"
+}
+
+# 程序会把设置与筛选条件存到 app.exe 旁边的 save.dat，而测试会 clear-filters 清条件、
+# 用 set-* 改开关——不备份的话跑一趟就把你的存档换成测试状态了。这里先存一份，结尾换回去。
+$SaveFile   = Join-Path $ProjectRoot 'save.dat'
+$SaveBackup = $null
+if (Test-Path -LiteralPath $SaveFile) {
+    $SaveBackup = Join-Path $env:TEMP ('save_backup_{0}.bin' -f $PID)
+    Copy-Item -LiteralPath $SaveFile -Destination $SaveBackup -Force
 }
 
 # app.exe 会把 [INFO]/[WARNING]/[ERROR] 日志写到 stderr。Windows PowerShell 5.1 在
@@ -126,6 +137,11 @@ $cases = @(
        Cmds = @('add-filter not:(name:*.tmp)',
                 'backup src c9.db', 'restore c9.db r9')
        Dir = 'r9'; Expect = @('a.txt', 'big.bin', 'c.log', 'sub\d.txt') }
+
+    @{ Name = '打包 + LZ77 压缩'
+       Cmds = @('set-archive true', 'set-compress true 3',
+                'backup src c10.db', 'restore c10.db r10')
+       Dir = 'r10'; Expect = $null }
 )
 
 # 命令一次性喂给程序，最后一定要 quit
@@ -254,6 +270,14 @@ foreach ($c in $checks) {
     $ok = $badText -like "*$($c.Need)*"
     if (-not $ok) { $failures.Add($c.Desc) }
     "{0,-6} {1}" -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $c.Desc
+}
+
+# 把用户的存档换回去（测试过程中它被改写成测试的收尾状态了）
+if ($SaveBackup -and (Test-Path -LiteralPath $SaveBackup)) {
+    Copy-Item -LiteralPath $SaveBackup -Destination $SaveFile -Force
+    Remove-Item -LiteralPath $SaveBackup -Force
+} elseif (-not $SaveBackup) {
+    Remove-Item -LiteralPath $SaveFile -Force -ErrorAction SilentlyContinue
 }
 
 "`n测试数据保留在: $Work"

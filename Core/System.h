@@ -17,6 +17,8 @@ public:
 
     void Start();
 
+    int Run(int argc, char* argv[]);
+
     template <typename T>
     T* Get() {
         return managers.Get<T>();

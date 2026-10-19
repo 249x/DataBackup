@@ -1,12 +1,19 @@
+#if defined(_WIN32)
+#include <windows.h>
+#include <shellapi.h> // CommandLineToArgvW
+#endif
+
 #include "CommandManager.h"
 
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <system_error>
 #include <utility>
 #include "../FileIO/FileIOManager.h"
 
 #include "../../General/Debug.h"
+#include "../../General/Utf8.h"
 
 CommandManager::CommandManager(System& sys) : Manager(sys) {}
 
@@ -128,7 +135,7 @@ bool CommandManager::RunConsole(const std::string& prompt) {
     std::cout << prompt << std::flush;
     if (!std::getline(std::cin, line)) {
         std::cout << "\n";
-        return true; // EOF：保持老行为，由调用方决定（System::Start 里会继续刷提示符）
+        return true; // EOF
     }
 
     auto notSpace = [](unsigned char c) { return !std::isspace(c); };
@@ -151,11 +158,44 @@ void CommandManager::PrintCommands() const {
     }
 }
 
+std::vector<std::string> CommandManager::CommandLineArguments(int argc, char* argv[]) {
+#if defined(_WIN32)
+    int count = 0;
+    LPWSTR* wide = ::CommandLineToArgvW(::GetCommandLineW(), &count);
+    if (wide != nullptr) {
+        std::vector<std::string> args;
+        args.reserve(count > 0 ? static_cast<std::size_t>(count) : 0);
+        for (int i = 0; i < count; ++i) {
+            args.push_back(Utf8::FromWide(wide[i]));
+        }
+        ::LocalFree(wide);
+        if (!args.empty()) {
+            return args;
+        }
+    }
+#endif
+
+    std::vector<std::string> args;
+    args.reserve(argc > 0 ? static_cast<std::size_t>(argc) : 0);
+    for (int i = 0; i < argc; ++i) {
+        args.emplace_back(argv[i]);
+    }
+    return args;
+}
+
 bool CommandManager::RunCommands(const std::filesystem::path& path){
     FileIOManager* IO = Get<FileIOManager>();
     std::string commands;
     if(!IO->ReadText(path, commands)){
+        std::error_code ec;
+        const std::filesystem::path resolved = std::filesystem::absolute(path, ec);
+        Debug::Error("Failed to run command file: " + Utf8::FromPath(ec ? path : resolved),
+                     "Command");
         return false;
+    }
+
+    if (commands.rfind("\xEF\xBB\xBF", 0) == 0) {
+        commands.erase(0, 3);
     }
     if(!Execute(commands)){
         return false;

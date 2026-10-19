@@ -68,8 +68,11 @@ bool Lz77Handler::Compression(const std::vector<uint8_t>& input,
             // 4. 否则输出字面量
             uint8_t b = input[i];
             output.push_back(b);
-            // 如果字面量恰好是 0xFF，需要再加一个 0x00 防止歧义
+            // 字面量 0xFF 会和回溯标记撞车，用 4 字节的 FF 00 00 00 转义
+            // （回溯标记里距离至少是 1，所以这串不可能是合法匹配）
             if (b == 0xFF) {
+                output.push_back(0x00);
+                output.push_back(0x00);
                 output.push_back(0x00);
             }
             ++i;
@@ -100,31 +103,38 @@ bool Lz77Handler::Decompression(const std::vector<uint8_t>& input,
     while (pos < input.size() && output.size() < originalSize) {
         uint8_t b = input[pos];
 
-        if (b == 0xFF) {
-            // 判断是否为回溯标记：0xFF 后面如果跟着大于 0 的距离数据，说明是回溯标记
-            if (pos + 1 < input.size() && input[pos + 1] == 0x00) {
-                // 这是被转义的字面量 0xFF
-                output.push_back(0xFF);
-                pos += 2;
-            } else {
-                // 这是回溯标记
-                if (pos + 3 >= input.size()) return false;
-                uint16_t dist = input[pos + 1] | (static_cast<uint16_t>(input[pos + 2]) << 8);
-                uint8_t len = input[pos + 3];
-                
-                if (dist == 0 || dist > output.size()) return false; // 越界
-
-                // 复制匹配（注意重叠复制的情况，比如距离为 1 的重复）
-                for (uint8_t k = 0; k < len && output.size() < originalSize; ++k) {
-                    output.push_back(output[output.size() - dist]);
-                }
-                pos += 4;
-            }
-        } else {
+        if (b != 0xFF) {
             // 普通字面量
             output.push_back(b);
             ++pos;
+            continue;
         }
+
+        // 0xFF 打头一定是 4 字节记号：后面 3 个 0 是转义的字面量，否则是回溯标记
+        if (pos + 3 >= input.size()) {
+            return false; // 记号不完整
+        }
+        const uint8_t b1 = input[pos + 1];
+        const uint8_t b2 = input[pos + 2];
+        const uint8_t b3 = input[pos + 3];
+
+        if (b1 == 0 && b2 == 0 && b3 == 0) {
+            output.push_back(0xFF); // 转义的字面量
+            pos += 4;
+            continue;
+        }
+
+        const std::uint16_t dist = static_cast<std::uint16_t>(b1 | (static_cast<std::uint16_t>(b2) << 8));
+        if (dist == 0 || dist > output.size() || b3 < MinMatch) {
+            return false; // 数据坏了
+        }
+
+        // 复制匹配（注意重叠复制的情况，比如距离为 1 的重复）
+        for (std::size_t k = 0; k < static_cast<std::size_t>(b3) && output.size() < originalSize;
+             ++k) {
+            output.push_back(output[output.size() - dist]);
+        }
+        pos += 4;
     }
 
     return output.size() == originalSize;

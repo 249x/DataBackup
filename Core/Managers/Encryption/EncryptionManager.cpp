@@ -6,9 +6,22 @@
 #include "../Command/CommandManager.h"
 #include "../FileIO/FileIOManager.h"
 #include "../../General/Debug.h"
+#include "../../General/Utf8.h"
 
 #include <algorithm>
 #include <memory>
+
+namespace {
+
+// 失败原因里最有用的三项：哪个算法、数据多大、钥匙多长（够不够）
+std::string Digest(const EncryptionHandler& handler, std::uint16_t type, std::size_t inputSize,
+                   std::size_t keySize) {
+	return std::string(handler.Name()) + " (id " + std::to_string(type) + "), input " +
+	       std::to_string(inputSize) + " bytes, key " + std::to_string(keySize) +
+	       " bytes (needs at least " + std::to_string(handler.MinimumKeySize()) + ")";
+}
+
+} // namespace
 
 EncryptionManager::EncryptionManager(System& sys) : Manager(sys) {}
 
@@ -27,7 +40,7 @@ void EncryptionManager::Initialize() {
 bool EncryptionManager::SetKeyPath(const std::filesystem::path& keyPath) {
 	FileIOManager* io = Manager::Get<FileIOManager>();
 	if (io == nullptr || !io->ReadContent(keyPath, key)) {
-		Debug::Error("Failed to read key file: " + keyPath.string(), "Encryption");
+		Debug::Error("Failed to read key file: " + Utf8::FromPath(keyPath), "Encryption");
 		return false;
 	}
 	return true;
@@ -110,7 +123,8 @@ bool EncryptionManager::Encryption(const std::vector<std::uint8_t>& data,
 		return false;
 	}
 	if (!it->second->Encrypt(data, key, output)) {
-		Debug::Error("Encrypt failed", "Encryption");
+		Debug::Error("Encrypt failed: " + Digest(*it->second, type, data.size(), key.size()),
+		             "Encryption");
 		return false;
 	}
 	return true;
@@ -126,7 +140,9 @@ bool EncryptionManager::Decryption(const std::vector<std::uint8_t>& data,
 		return false;
 	}
 	if (!it->second->Decrypt(data, key, output)) {
-		Debug::Error("Decrypt failed", "Encryption");
+		Debug::Error("Decrypt failed: " + Digest(*it->second, type, data.size(), key.size()) +
+		                 ", wrong key or corrupted data?",
+		             "Encryption");
 		return false;
 	}
 	return true;

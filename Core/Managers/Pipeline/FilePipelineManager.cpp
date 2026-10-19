@@ -9,6 +9,7 @@
 
 #include "../../General/Debug.h"
 #include "../../General/SerializationUtils.h"
+#include "../../General/Utf8.h"
 
 #include <algorithm>
 #include <iostream>
@@ -42,7 +43,7 @@ bool FilePipelineManager::SetArchive(bool enabled){
     return true;
 }
 
-// 压缩/加密要校验算法号：开着却指了个不存在的算法，那是设置错误
+
 bool FilePipelineManager::SetCompression(bool enabled, std::uint16_t type){
     CompressionManager* compression = Get<CompressionManager>();
     if (compression == nullptr || (enabled && compression->Get(type) == nullptr)){
@@ -167,6 +168,11 @@ bool FilePipelineManager::Backup(const std::filesystem::path& srcPath, const std
     return IO->Write(tarPath, entries);
 }
 
+std::string FilePipelineManager::Where(const FileEntry& entry) {
+    const std::filesystem::path& path = entry.Path();
+    return path.empty() ? std::string{} : ": " + Utf8::FromPath(path);
+}
+
 bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
                                   const std::filesystem::path& tarPath) {
     FileIOManager* IO = Get<FileIOManager>();
@@ -182,6 +188,8 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
     }
     entries.clear();
 
+    bool degraded = false;
+
     while (!entryStack.empty()) {
         FileEntry current = std::move(entryStack.top());
         entryStack.pop();
@@ -193,15 +201,36 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
         }
         switch (content.Operation()) {
             case 1:
-                DealArchive(content, entryStack);
+                if (!DealArchive(content, entryStack)) {
+                    Debug::Warning("Failed to unpack archive" + Where(current) +
+                                     ", kept as-is",
+                                 "Pipeline");
+                    degraded = true;
+                    entries.push_back(std::move(current));
+                    break;
+                }
                 break;
             case 2:
-                DealCompress(content, current);
-                entryStack.push(current);
+                if (!DealCompress(content, current)) {
+                    Debug::Warning("Failed to decompress entry" + Where(current) +
+                                     ", kept as-is (corrupted backup?)",
+                                 "Pipeline");
+                    degraded = true;
+                    entries.push_back(std::move(current));
+                    break;
+                }
+                entryStack.push(std::move(current));
                 break;
             case 3:
-                DealEncrypt(content, current);
-                entryStack.push(current);
+                if (!DealEncrypt(content, current)) {
+                    Debug::Warning("Failed to decrypt entry" + Where(current) +
+                                     ", kept as-is (load the backup's key first: key <Path>)",
+                                 "Pipeline");
+                    degraded = true;
+                    entries.push_back(std::move(current));
+                    break;
+                }
+                entryStack.push(std::move(current));
                 break;
             default:
                 Debug::Warning("Unkown operation type", "Pipeline");
@@ -209,7 +238,9 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
                 break;
         }
     }
-    return IO->Write(tarPath, entries);
+
+    const bool written = IO->Write(tarPath, entries);
+    return written && !degraded;
 }
 
 bool FilePipelineManager::PrintSettings() {

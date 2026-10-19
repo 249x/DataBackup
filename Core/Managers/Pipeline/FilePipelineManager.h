@@ -40,6 +40,9 @@ public:
 private:
 	void FilterEntries(std::vector<FileEntry>& entries);
 
+	// 报错时把条目的相对路径拼成 ": <路径>"；顶层条目（整份备份）没有路径，返回空串
+	static std::string Where(const FileEntry& entry);
+
 	bool PackEntries(std::vector<FileEntry>& entries);
 	bool CompressEntries(std::vector<FileEntry>& entries, std::uint16_t type);
 	bool EncryptEntries(std::vector<FileEntry>& entries, std::uint16_t type);

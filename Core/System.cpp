@@ -48,3 +48,16 @@ void System::Start(){
         }
     }
 }
+
+int System::Run(int argc, char* argv[]) {
+    CommandManager* command = Get<CommandManager>();
+    if (command != nullptr) {
+        const std::vector<std::string> args = CommandManager::CommandLineArguments(argc, argv);
+        if (args.size() > 1) {
+            return command->Execute("run \"" + args[1] + "\"") ? 0 : 1;
+        }
+    }
+
+    Start();
+    return 0;
+}
