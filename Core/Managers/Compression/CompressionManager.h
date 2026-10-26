@@ -40,6 +40,6 @@ public:
     }
 
 private:
-
+    static constexpr const char* LogInfo = "Compression";
     std::unordered_map<std::uint16_t, std::unique_ptr<CompressionHandler>> handlers;
 };

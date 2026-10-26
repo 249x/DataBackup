@@ -39,6 +39,11 @@ private:
     bool ApplySettingsToBackend(QString& error);
     bool LoadKey(QComboBox* source, QLineEdit* edit, unsigned short algorithmId, QString& error);
 
+    void RefreshSettingsFromBackend();
+    void SaveSettingsToFile();
+    void LoadSettingsFromFile();
+    void DeleteSettingsFile();
+
     void RefreshSettingsPreview();
     void RefreshRestoreInfo();
     void RefreshFilterSummary();
@@ -71,6 +76,9 @@ private:
     QLineEdit* keyEdit = nullptr;
     QPushButton* keyBrowse = nullptr;
     QLabel* settingsPreview = nullptr;
+    QPushButton* saveSettings = nullptr;
+    QPushButton* loadSettings = nullptr;
+    QPushButton* deleteSettings = nullptr;
     QLabel* filterSummary = nullptr;
     QPushButton* backupRun = nullptr;
     QProgressBar* backupBar = nullptr;
@@ -99,9 +107,9 @@ private:
     // 日志页
     QPlainTextEdit* logView = nullptr;
 
-    // 启动时把流水线（可能刚从存档读回来）的值灌进控件。这段时间里控件的信号不算
-    // "用户改动"：控件是一个个同步的，同步到一半时推回流水线会把还没同步的那些
-    // 控件（仍是默认值）当成用户设置写进去，刚读出来的设置就被覆盖了
+    // 把内核里的设置（初始值、或刚用「加载设置」读回来的那份）灌进控件。这段时间里
+    // 控件的信号不算"用户改动"：控件是一个个同步的，同步到一半时推回内核会把还没
+    // 同步到的那些控件（仍是旧值）当成用户设置写进去，刚读出来的设置就被覆盖了
     bool syncingSettings = false;
 
     bool busy = false;

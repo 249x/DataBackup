@@ -37,6 +37,7 @@ public:
     bool CheckKey(std::uint16_t type);
 
 private:
+	static constexpr const char* LogInfo = "Encryption";
     std::vector<std::uint8_t> key;
     std::unordered_map<std::uint16_t, std::unique_ptr<EncryptionHandler>> handlersMap;
 };

@@ -1,4 +1,5 @@
 #include "SaveManager.h"
+#include "../Command/CommandManager.h"
 #include "../FileIO/FileIOManager.h"
 #include "../../General/SerializationUtils.h"
 #include "../../General/Utf8.h"
@@ -13,14 +14,17 @@ std::filesystem::path SaveManager::SaveFilePath(){
 
 void SaveManager::Initialize(){
     CollectSaveData();
-    if (IsSaveFileExists()) {
-        Load();
+
+    CommandManager* command = Get<CommandManager>();
+    if (command == nullptr) {
+        Debug::Warning("No command manager found, save / load are unavailable", LogInfo);
+        return;
     }
-}
 
-
-void SaveManager::OnDestroy(){
-    Save();
+    command->RegisterCommand("save", "Save settings and filters to save.dat", Save, this);
+    command->RegisterCommand("load", "Load settings and filters from save.dat", Load, this);
+    command->RegisterCommand("delete", "Delete save.dat (settings and filters untouched)",
+                             Delete, this);
 }
 
 
@@ -31,6 +35,27 @@ bool SaveManager::IsSaveFileExists(){
         return false;
     }
     return IO->Exists(SaveFilePath());
+}
+
+bool SaveManager::Delete(){
+    FileIOManager* IO = Get<FileIOManager>();
+    if (!IO){
+        Debug::Error("No file IO manager found", LogInfo);
+        return false;
+    }
+
+    const std::filesystem::path path = SaveFilePath();
+    if (!IO->Exists(path)){
+        Debug::Warning("Nothing to delete: " + Utf8::FromPath(path), LogInfo);
+        return false;
+    }
+
+    // 只删文件：设置与筛选条件还活在内核里，调用方想"恢复出厂"得自己去改
+    if (!IO->Delete(path)){
+        Debug::Error("Failed to delete save data: " + Utf8::FromPath(path), LogInfo);
+        return false;
+    }
+    return true;
 }
 
 bool SaveManager::Save(){

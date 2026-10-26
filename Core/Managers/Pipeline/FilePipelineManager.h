@@ -17,8 +17,18 @@ public:
 
 	void Initialize() override;
 
-    bool Backup(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath);
-    bool Restore(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath);
+    bool SetBackupPaths(const std::filesystem::path& source,
+                        const std::filesystem::path& destination);
+    bool SetRestorePaths(const std::filesystem::path& source,
+                         const std::filesystem::path& destination);
+
+    const std::filesystem::path& BackupSource() const noexcept;
+    const std::filesystem::path& BackupDestination() const noexcept;
+    const std::filesystem::path& RestoreSource() const noexcept;
+    const std::filesystem::path& RestoreDestination() const noexcept;
+
+    bool Backup();
+    bool Restore();
 
 	bool SetArchive(bool enabled);
 	bool SetCompression(bool enabled, std::uint16_t type);
@@ -38,9 +48,9 @@ public:
 	std::uint32_t SaveID() const override;
 
 private:
+	static constexpr const char* LogInfo = "Pipeline";
 	void FilterEntries(std::vector<FileEntry>& entries);
 
-	// 报错时把条目的相对路径拼成 ": <路径>"；顶层条目（整份备份）没有路径，返回空串
 	static std::string Where(const FileEntry& entry);
 
 	bool PackEntries(std::vector<FileEntry>& entries);
@@ -56,4 +66,9 @@ private:
 	std::uint16_t compressionType = 0;
 	bool encryptionEnabled = false;
 	std::uint16_t encryptionType = 0;
+
+	std::filesystem::path backupSource;
+	std::filesystem::path backupDestination;
+	std::filesystem::path restoreSource;
+	std::filesystem::path restoreDestination;
 };

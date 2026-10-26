@@ -10,7 +10,7 @@
       3. 对每个用例：备份 -> 还原 -> 逐文件比对 SHA256 和修改时间
       4. 打印 PASS/FAIL 汇总，退出码 0 表示全过
 
-  跑前会备份 app.exe 旁边的 save.dat，跑完再换回去，所以不会动你自己的设置与筛选条件。
+  程序不会自动读写存档（save.dat），所以测试不会动你自己的设置与筛选条件。
 
   覆盖用例: 打包备份/还原、压缩(Huffman/RLE)、加密(AES/DES)、
             元数据(修改时间)保全、筛选(白名单语义)、异常输入健壮性
@@ -44,14 +44,7 @@ if (-not (Test-Path -LiteralPath $App)) {
     throw "找不到 app.exe，请先在 $ProjectRoot 下执行 make"
 }
 
-# 程序会把设置与筛选条件存到 app.exe 旁边的 save.dat，而测试会 clear-filters 清条件、
-# 用 set-* 改开关——不备份的话跑一趟就把你的存档换成测试状态了。这里先存一份，结尾换回去。
-$SaveFile   = Join-Path $ProjectRoot 'save.dat'
-$SaveBackup = $null
-if (Test-Path -LiteralPath $SaveFile) {
-    $SaveBackup = Join-Path $env:TEMP ('save_backup_{0}.bin' -f $PID)
-    Copy-Item -LiteralPath $SaveFile -Destination $SaveBackup -Force
-}
+# 程序只在收到 save 命令时才写存档，测试全程不碰它。
 
 # app.exe 会把 [INFO]/[WARNING]/[ERROR] 日志写到 stderr。Windows PowerShell 5.1 在
 # $ErrorActionPreference = 'Stop' 下会把原生程序的 stderr 当成终止性错误（NativeCommandError），
@@ -93,54 +86,47 @@ for ($i = 0; $i -lt 8;  $i++) { $key8[$i]  = [byte]($i + 1) }
 $allFiles = @('a.txt', 'b.tmp', 'big.bin', 'c.log', 'sub\d.txt', 'sub\e.tmp')
 
 # ------------------------------------------------------------------ 测试用例
+# Cmds 只写这个用例特有的设置；"路径设置 + backup + restore"由下面的循环统一拼。
 # Expect 为 $null 表示"必须和源目录完全一致"，否则是期望的文件清单
 $cases = @(
-    @{ Name = '打包备份 + 还原（默认设置）'
-       Cmds = @('set-archive true', 'set-compress false 0', 'set-encrypt false 0',
-                'backup src c1.db', 'restore c1.db r1')
+    @{ Name = '打包备份 + 还原（默认设置）'; Db = 'c1.db'
+       Cmds = @('set-archive true', 'set-compress false 0', 'set-encrypt false 0')
        Dir = 'r1'; Expect = $null }
 
-    @{ Name = '不打包（备份产物是目录树）'
-       Cmds = @('set-archive false', 'backup src c2.out', 'restore c2.out r2')
+    @{ Name = '不打包（备份产物是目录树）'; Db = 'c2.out'
+       Cmds = @('set-archive false')
        Dir = 'r2'; Expect = $null }
 
-    @{ Name = '打包 + Huffman 压缩'
-       Cmds = @('set-archive true', 'set-compress true 1',
-                'backup src c3_h.db', 'restore c3_h.db r3')
+    @{ Name = '打包 + Huffman 压缩'; Db = 'c3_h.db'
+       Cmds = @('set-archive true', 'set-compress true 1')
        Dir = 'r3'; Expect = $null }
 
-    @{ Name = '打包 + RLE 压缩'
-       Cmds = @('set-compress true 2', 'backup src c4_r.db', 'restore c4_r.db r4')
+    @{ Name = '打包 + RLE 压缩'; Db = 'c4_r.db'
+       Cmds = @('set-compress true 2')
        Dir = 'r4'; Expect = $null }
 
-    @{ Name = '打包 + AES 加密'
-       Cmds = @('set-compress false 0', 'set-encrypt true 1', 'key key32.bin',
-                'backup src c5_aes.db', 'restore c5_aes.db r5')
+    @{ Name = '打包 + AES 加密'; Db = 'c5_aes.db'
+       Cmds = @('set-compress false 0', 'set-encrypt true 1', 'key key32.bin')
        Dir = 'r5'; Expect = $null }
 
-    @{ Name = '打包 + DES 加密'
-       Cmds = @('set-encrypt true 2', 'key key8.bin',
-                'backup src c6_des.db', 'restore c6_des.db r6')
+    @{ Name = '打包 + DES 加密'; Db = 'c6_des.db'
+       Cmds = @('set-encrypt true 2', 'key key8.bin')
        Dir = 'r6'; Expect = $null }
 
-    @{ Name = '筛选：name:*.tmp（白名单，只备份 .tmp）'
-       Cmds = @('set-encrypt false 0', 'add-filter name:*.tmp',
-                'backup src c7.db', 'restore c7.db r7')
+    @{ Name = '筛选：name:*.tmp（白名单，只备份 .tmp）'; Db = 'c7.db'
+       Cmds = @('set-encrypt false 0', 'add-filter name:*.tmp')
        Dir = 'r7'; Expect = @('b.tmp', 'sub\e.tmp') }
 
-    @{ Name = '筛选：and:(type:regular;size:max=1k)'
-       Cmds = @('add-filter and:(type:regular;size:max=1k)',
-                'backup src c8.db', 'restore c8.db r8')
+    @{ Name = '筛选：and:(type:regular;size:max=1k)'; Db = 'c8.db'
+       Cmds = @('add-filter and:(type:regular;size:max=1k)')
        Dir = 'r8'; Expect = @('a.txt', 'b.tmp', 'c.log', 'sub\d.txt', 'sub\e.tmp') }
 
-    @{ Name = '筛选：not:(name:*.tmp)'
-       Cmds = @('add-filter not:(name:*.tmp)',
-                'backup src c9.db', 'restore c9.db r9')
+    @{ Name = '筛选：not:(name:*.tmp)'; Db = 'c9.db'
+       Cmds = @('add-filter not:(name:*.tmp)')
        Dir = 'r9'; Expect = @('a.txt', 'big.bin', 'c.log', 'sub\d.txt') }
 
-    @{ Name = '打包 + LZ77 压缩'
-       Cmds = @('set-archive true', 'set-compress true 3',
-                'backup src c10.db', 'restore c10.db r10')
+    @{ Name = '打包 + LZ77 压缩'; Db = 'c10.db'
+       Cmds = @('set-archive true', 'set-compress true 3')
        Dir = 'r10'; Expect = $null }
 )
 
@@ -152,14 +138,19 @@ foreach ($case in $cases) {
     # 还原目标目录必须先清掉：restore 是"往目录里写"，不会删除上一次的残留
     $target = Join-Path $Work $case.Dir
     if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
-    # 筛选条件会跨进程存进 save.dat，所以每个用例开始前先清空：否则上一轮的残留条件会
+    # 筛选条件在同一次会话里会一直累加，所以每个用例开始前先清空：否则上一轮的残留条件会
     # 影响本用例的期望结果。用 clear-filters 而不是 remove-filter <编号>——编号是顺次
-    # 分配的（删除也不复用），写死编号在存档里已有条件时就会错位。
+    # 分配的（删除也不复用），写死编号就会错位。
     $script.Add('clear-filters')
     $script.AddRange([string[]]$case.Cmds)
+    # 路径也是设置项：先把"源目录 / 备份文件 / 输出目录"设好，再执行
+    $script.Add("set-backup src $($case.Db)")
+    $script.Add("set-restore $($case.Db) $($case.Dir)")
+    $script.Add('backup')
+    $script.Add('restore')
 }
 
-$script.Add('clear-filters')  # 跑完不留残余条件（存档下次还会被读回来）
+$script.Add('clear-filters')  # 跑完不留残余条件
 $script.Add('quit')
 $output = Invoke-App ($script -join "`n")
 
@@ -236,16 +227,19 @@ $badCmds = @(
     # 这里刻意用 ASCII 路径：中文参数经管道喂进来时终端按 GBK 编码，程序按 UTF-8 解释会
     # 得到无效路径（win32 error 123），报的是另一条错误——那是"控制台版手敲中文路径
     # 会失败"这个已知限制（见 README），不该跟"路径不存在要报错"混在一起测
-    'backup no-such-dir x.db'
-    'backup src'
+    'set-backup no-such-dir x.db'
+    'backup'
+    'set-backup src'          # 参数个数不对
     'set-compress true 9'
     'set-encrypt true 1'
-    'backup src c_nokey.db'
+    'set-backup src c_nokey.db'
+    'backup'
     'set-encrypt false 0'
     # 用 ASCII 的"肯定匹配不到"的规格：中文经管道会被终端按 GBK 编码，程序按 UTF-8 解释
     # 会得到一串 '?'（两个字的通配符），既靠运气又不好读
     'add-filter name:__no_such_file__*'
-    'backup src c_empty.db'
+    'set-backup src c_empty.db'
+    'backup'
     'remove-filter 99'
     'clear-filters'
     'quit'
@@ -270,14 +264,6 @@ foreach ($c in $checks) {
     $ok = $badText -like "*$($c.Need)*"
     if (-not $ok) { $failures.Add($c.Desc) }
     "{0,-6} {1}" -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $c.Desc
-}
-
-# 把用户的存档换回去（测试过程中它被改写成测试的收尾状态了）
-if ($SaveBackup -and (Test-Path -LiteralPath $SaveBackup)) {
-    Copy-Item -LiteralPath $SaveBackup -Destination $SaveFile -Force
-    Remove-Item -LiteralPath $SaveBackup -Force
-} elseif (-not $SaveBackup) {
-    Remove-Item -LiteralPath $SaveFile -Force -ErrorAction SilentlyContinue
 }
 
 "`n测试数据保留在: $Work"

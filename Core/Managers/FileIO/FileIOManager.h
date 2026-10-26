@@ -32,6 +32,7 @@ public:
     bool WriteText(const std::filesystem::path& filePath, const std::string& text) const;
 
     bool Exists(const std::filesystem::path& path) const;
+    bool Delete(const std::filesystem::path& path) const;
     std::filesystem::path CurrentPath();
     bool CD(const std::string& target);
     std::filesystem::path BesideExecutable(const std::filesystem::path& relative) const;

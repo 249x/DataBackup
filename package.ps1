@@ -227,15 +227,18 @@ $consoleReadme = @'
 
   help                     查看全部命令
   cd D:/demo               切换当前目录（只认 Windows 风格路径）
-  backup src pack.db       备份 src 到 pack.db
-  restore pack.db out      把 pack.db 还原到 out 目录
-  settings                 查看打包/压缩/加密的当前开关
+  set-backup src pack.db   设置备份路径：源目录 + 备份文件
+  set-restore pack.db out  设置还原路径：备份文件 + 输出目录
+  backup                   按当前设置备份
+  restore                  按当前设置还原
+  settings                 查看当前设置（含备份/还原路径）
   set-archive true         是否把多文件拼成一个归档文件
-  set-compress true 1      压缩：1=Huffman，2=RLE
+  set-compress true 1      压缩：1=Huffman，2=RLE，3=LZ77
   set-encrypt true 1       加密：1=AES，2=DES
   key key32.bin            设置密钥文件（AES≥32 字节，DES≥8 字节）
   add-filter name:*.tmp    添加筛选条件（白名单：所有条件都通过才备份）
   filters                  查看已添加的筛选条件
+  save / load / delete     存档：存设置、读设置、删存档
   quit                     退出
 
 注意：

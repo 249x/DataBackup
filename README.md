@@ -82,9 +82,11 @@
 | `help` | — | 列出全部命令及其参数类型 |
 | `cd` | `<目录>` | 切换当前目录，提示符跟着变 |
 | `run` | `<命令文件>` | 逐行执行文件里的命令（空行跳过） |
-| `backup` | `<源目录> <备份文件>` | 按当前设置备份 |
-| `restore` | `<备份文件> <输出目录>` | 还原，处理层自动识别 |
-| `settings` | — | 打印当前的打包 / 压缩 / 加密开关 |
+| `set-backup` | `<源目录> <备份文件>` | 设定备份的两条路径 |
+| `set-restore` | `<备份文件> <输出目录>` | 设定还原的两条路径 |
+| `backup` | — | 按当前设置备份（含上面设的路径） |
+| `restore` | — | 按当前设置还原，处理层自动识别 |
+| `settings` | — | 打印当前设置：备份 / 还原路径与三个开关 |
 | `set-archive` | `<true\|false>` | 备份时是否打包 |
 | `set-compress` | `<true\|false> <算法号>` | 是否压缩、用哪个（1=Huffman，2=RLE） |
 | `set-encrypt` | `<true\|false> <算法号>` | 是否加密、用哪个（1=AES，2=DES） |
@@ -94,13 +96,19 @@
 | `set-filter` | `<编号> <参数>` | 改某条筛选条件的参数 |
 | `filters` | — | 列出已添加的筛选条件 |
 | `clear-filters` | — | 清空所有筛选条件（编号不复用） |
+| `save` | — | 把当前设置与筛选条件存到程序旁边的 `save.dat` |
+| `load` | — | 从 `save.dat` 读回设置与筛选条件 |
+| `delete` | — | 删掉 `save.dat`（只删文件，内存里的设置不变） |
 | `quit` / `exit` | — | 退出 |
 
 布尔参数认 `true/false`、`1/0`、`yes/no`、`on/off`、`y/n`，不分大小写。
-`backup` 与 `restore` **成功时不打印任何东西**，出错才会在日志里留一条 `[ERROR]`。
+备份 / 还原的两条路径也是**设置项**（和打包、压缩、加密的开关一样存在流水线里）：
+先用 `set-backup` / `set-restore` 设好，再用 `backup` / `restore` 执行；没设就执行会直接报错。
+这两个命令**成功时不打印任何东西**，出错才会在日志里留一条 `[ERROR]`。
 
-退出时会把当前的打包 / 压缩 / 加密设置与筛选条件存到**可执行文件旁边**的 `save.dat`
-（程序自己加的，整个目录拷走也不会丢；删掉它就是恢复出厂设置），下次启动自动读回。
+设置与筛选条件**不会自动保存**：退出时什么都不写，启动时也从默认值开始。想把一套设置
+留着下次用，就敲 `save` 把它存到**可执行文件旁边**的 `save.dat`（整个目录拷走也不会丢），
+以后用 `load` 读回来；`delete` 删掉存档（只删文件，当前设置不变）。
 筛选条件里的编号是顺次分配的、删除也不复用，所以编号只会变大——`clear-filters` 只清空列表。
 
 一段真实会话（`settings` 与 `filters` 两段输出是原样抄的）：
@@ -110,9 +118,13 @@ D:\demo|> set-archive true
 D:\demo|> set-compress true 1
 D:\demo|> add-filter not:(name:*.tmp)
 [INFO] [2026-10-10 01:16:06.938] [Filter] Filter #1 added: not:(name:*.tmp)
-D:\demo|> backup "D:\demo source" demo.db
-D:\demo|> restore demo.db out
+D:\demo|> set-backup "D:\demo source" demo.db
+D:\demo|> set-restore demo.db out
+D:\demo|> backup
+D:\demo|> restore
 D:\demo|> settings
+backup   : D:/demo source -> demo.db
+restore  : demo.db -> out
 archive  : on
 compress : on (algorithm 1)
 encrypt  : off (algorithm 0, key missing)
@@ -136,6 +148,12 @@ D:\demo|> quit
 加密算法可选 AES 或 DES），密钥既可以指定密钥文件，也可以直接输入口令
 （界面侧对口令做 SHA-256 派生）。底部实时显示当前设置。若设置了筛选条件，
 这里会显示条数。
+
+再往下是**「设置存档」**：三个按钮分别是「保存设置」「加载设置」「删除存档」。程序**不会
+自动存 / 自动读**——点「保存设置」把打包 / 压缩 / 加密与筛选条件写进程序旁边的 `save.dat`，
+点「加载设置」把它们读回来（控件与筛选表会立刻跟着变，当前筛选条件会被存档里的替换），
+点「删除存档」先让你确认再删掉这个文件（当前设置不受影响）。
+没存过存档时点「加载设置」/「删除存档」只会提示你先保存一次。
 
 **还原** —— 选备份文件和输出目录。**「备份内容（自动识别）」会逐层读开备份文件，
 把里面用到的处理方式依次列出来**，例如：

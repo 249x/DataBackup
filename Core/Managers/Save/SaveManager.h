@@ -13,10 +13,11 @@ public:
     explicit SaveManager(System& sys);
 
     void Initialize() override;
-    void OnDestroy() override;
 
     bool Save();
     bool Load();
+    bool Delete();
+
     bool IsSaveFileExists();
 
     bool AddSaveData(ISaveData* saveData);

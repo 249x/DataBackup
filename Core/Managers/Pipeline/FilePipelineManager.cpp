@@ -25,10 +25,16 @@ FilePipelineManager::~FilePipelineManager(){
 void FilePipelineManager::Initialize(){
     CommandManager* command = Get<CommandManager>();
 
-    command->RegisterCommand("backup", "Backup file tree by current settings", Backup, this);
-    command->RegisterCommand("restore", "Restore file tree", Restore, this);
+    command->RegisterCommand("backup", "Backup the source tree to the backup file", Backup, this);
+    command->RegisterCommand("restore", "Restore the backup file to the output directory", Restore,
+                             this);
 
     command->RegisterCommand("settings", "Print backup settings", PrintSettings, this);
+
+    command->RegisterCommand("set-backup", "Set backup paths: <source dir> <backup file>",
+                             SetBackupPaths, this);
+    command->RegisterCommand("set-restore", "Set restore paths: <backup file> <output dir>",
+                             SetRestorePaths, this);
 
     command->RegisterCommand("set-archive", "Enable/disable packing in backup",
                              SetArchive, this);
@@ -41,6 +47,36 @@ void FilePipelineManager::Initialize(){
 bool FilePipelineManager::SetArchive(bool enabled){
     archiveEnabled = enabled;
     return true;
+}
+
+bool FilePipelineManager::SetBackupPaths(const std::filesystem::path& source,
+                                         const std::filesystem::path& destination){
+    backupSource = source;
+    backupDestination = destination;
+    return true;
+}
+
+bool FilePipelineManager::SetRestorePaths(const std::filesystem::path& source,
+                                          const std::filesystem::path& destination){
+    restoreSource = source;
+    restoreDestination = destination;
+    return true;
+}
+
+const std::filesystem::path& FilePipelineManager::BackupSource() const noexcept{
+    return backupSource;
+}
+
+const std::filesystem::path& FilePipelineManager::BackupDestination() const noexcept{
+    return backupDestination;
+}
+
+const std::filesystem::path& FilePipelineManager::RestoreSource() const noexcept{
+    return restoreSource;
+}
+
+const std::filesystem::path& FilePipelineManager::RestoreDestination() const noexcept{
+    return restoreDestination;
 }
 
 
@@ -95,7 +131,11 @@ bool FilePipelineManager::Save(std::vector<std::uint8_t>& data){
         io.WriteUnsigned(data, static_cast<std::uint8_t>(compressionEnabled ? 1 : 0)) &&
         io.WriteUnsigned(data, compressionType) &&
         io.WriteUnsigned(data, static_cast<std::uint8_t>(encryptionEnabled ? 1 : 0)) &&
-        io.WriteUnsigned(data, encryptionType);
+        io.WriteUnsigned(data, encryptionType) &&
+        io.WriteString(data, Utf8::FromPath(backupSource)) &&
+        io.WriteString(data, Utf8::FromPath(backupDestination)) &&
+        io.WriteString(data, Utf8::FromPath(restoreSource)) &&
+        io.WriteString(data, Utf8::FromPath(restoreDestination));
     if (!ok){
         Debug::Error("Failed to serialize pipeline settings", "Pipeline");
         return false;
@@ -110,17 +150,27 @@ bool FilePipelineManager::Load(const std::vector<std::uint8_t>& data){
     std::uint8_t encryption = 0;
     std::uint16_t compressionId = 0;
     std::uint16_t encryptionId = 0;
+    std::string backupSourceText;
+    std::string backupDestinationText;
+    std::string restoreSourceText;
+    std::string restoreDestinationText;
 
     if (!io.ReadUnsigned(data, archive) ||
         !io.ReadUnsigned(data, compression) ||
         !io.ReadUnsigned(data, compressionId) ||
         !io.ReadUnsigned(data, encryption) ||
-        !io.ReadUnsigned(data, encryptionId)){
+        !io.ReadUnsigned(data, encryptionId) ||
+        !io.ReadString(data, backupSourceText) ||
+        !io.ReadString(data, backupDestinationText) ||
+        !io.ReadString(data, restoreSourceText) ||
+        !io.ReadString(data, restoreDestinationText)){
         Debug::Error("Saved pipeline settings are too short", "Pipeline");
         return false;
     }
 
     SetArchive(archive != 0);
+    SetBackupPaths(Utf8::ToPath(backupSourceText), Utf8::ToPath(backupDestinationText));
+    SetRestorePaths(Utf8::ToPath(restoreSourceText), Utf8::ToPath(restoreDestinationText));
     const bool compressionOk = SetCompression(compression != 0, compressionId);
     const bool encryptionOk = SetEncryption(encryption != 0, encryptionId);
     return compressionOk && encryptionOk;
@@ -130,7 +180,16 @@ std::uint32_t FilePipelineManager::SaveID() const{
     return SaveIDValue;
 }
 
-bool FilePipelineManager::Backup(const std::filesystem::path& srcPath, const std::filesystem::path& tarPath){
+bool FilePipelineManager::Backup(){
+    if (backupSource.empty() || backupDestination.empty()) {
+        Debug::Error("Backup paths are not set, run 'set-backup <source dir> <backup file>' first",
+                     "Pipeline");
+        return false;
+    }
+
+    const std::filesystem::path& srcPath = backupSource;
+    const std::filesystem::path& tarPath = backupDestination;
+
     FileIOManager* IO = Get<FileIOManager>();
     EncryptionManager* encryption = Get<EncryptionManager>();
 
@@ -173,8 +232,16 @@ std::string FilePipelineManager::Where(const FileEntry& entry) {
     return path.empty() ? std::string{} : ": " + Utf8::FromPath(path);
 }
 
-bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
-                                  const std::filesystem::path& tarPath) {
+bool FilePipelineManager::Restore() {
+    if (restoreSource.empty() || restoreDestination.empty()) {
+        Debug::Error("Restore paths are not set, run 'set-restore <backup file> <output dir>' first",
+                     "Pipeline");
+        return false;
+    }
+
+    const std::filesystem::path& srcPath = restoreSource;
+    const std::filesystem::path& tarPath = restoreDestination;
+
     FileIOManager* IO = Get<FileIOManager>();
 
     std::vector<FileEntry> entries;
@@ -202,9 +269,6 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
         switch (content.Operation()) {
             case 1:
                 if (!DealArchive(content, entryStack)) {
-                    Debug::Warning("Failed to unpack archive" + Where(current) +
-                                     ", kept as-is",
-                                 "Pipeline");
                     degraded = true;
                     entries.push_back(std::move(current));
                     break;
@@ -212,9 +276,6 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
                 break;
             case 2:
                 if (!DealCompress(content, current)) {
-                    Debug::Warning("Failed to decompress entry" + Where(current) +
-                                     ", kept as-is (corrupted backup?)",
-                                 "Pipeline");
                     degraded = true;
                     entries.push_back(std::move(current));
                     break;
@@ -223,9 +284,6 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
                 break;
             case 3:
                 if (!DealEncrypt(content, current)) {
-                    Debug::Warning("Failed to decrypt entry" + Where(current) +
-                                     ", kept as-is (load the backup's key first: key <Path>)",
-                                 "Pipeline");
                     degraded = true;
                     entries.push_back(std::move(current));
                     break;
@@ -245,8 +303,13 @@ bool FilePipelineManager::Restore(const std::filesystem::path& srcPath,
 
 bool FilePipelineManager::PrintSettings() {
     EncryptionManager* encryption = Get<EncryptionManager>();
+    const auto show = [](const std::filesystem::path& path) {
+        return path.empty() ? std::string("(not set)") : Utf8::FromPath(path);
+    };
 
-    std::cout << "archive  : " << (archiveEnabled ? "on" : "off") << "\n"
+    std::cout << "backup   : " << show(backupSource) << " -> " << show(backupDestination) << "\n"
+              << "restore  : " << show(restoreSource) << " -> " << show(restoreDestination) << "\n"
+              << "archive  : " << (archiveEnabled ? "on" : "off") << "\n"
               << "compress : " << (compressionEnabled ? "on" : "off")
               << " (algorithm " << compressionType << ")\n"
               << "encrypt  : " << (encryptionEnabled ? "on" : "off")
@@ -336,6 +399,7 @@ bool FilePipelineManager::DealArchive(const StructuredFileContent& content,
     ArchiveManager* archive = Get<ArchiveManager>();
     std::vector<FileEntry> entries;
     if (!archive->Unpack(content.Data(), content.CustomRef(), entries)) {
+        Debug::Warning("Failed to unpack archive, kept as-is", LogInfo);
         return false;
     }
     for (FileEntry& entry : entries) {
@@ -348,6 +412,8 @@ bool FilePipelineManager::DealCompress(const StructuredFileContent& content,
     FileEntry& entry){
     CompressionManager* compression = Get<CompressionManager>();
     if (!compression->Decompression(content.Data(), content.CustomRef(), entry.Content())) {
+        Debug::Warning("Failed to decompress entry" + Where(entry) +
+        ", kept as-is (corrupted backup?)", LogInfo);
         return false;
     }
     return true;
@@ -357,7 +423,17 @@ bool FilePipelineManager::DealCompress(const StructuredFileContent& content,
 bool FilePipelineManager::DealEncrypt(const StructuredFileContent& content, 
     FileEntry& entry){
     EncryptionManager* encryption = Get<EncryptionManager>();
+
+    if(!encryption->CheckKey(content.CustomRef())){
+        Debug::Warning("Key for encryption type " + std::to_string(content.CustomRef()) +
+        " is not loaded, cannot decrypt entry" + Where(entry) +
+        ", kept as-is (load the backup's key first: key <Path>)",
+        LogInfo);
+        return false;
+    }
     if (!encryption->Decryption(content.Data(), content.CustomRef(), entry.Content())) {
+        Debug::Warning("Failed to decrypt entry" + Where(entry) + ", key mismatch or corrupted data",
+        LogInfo);
         return false;
     }
     return true;

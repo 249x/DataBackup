@@ -22,12 +22,12 @@ void CompressionManager::Initialize() {
 bool CompressionManager::Compression(const std::vector<uint8_t>& input, std::uint16_t type, std::vector<uint8_t>& output) const{
     CompressionHandler* handler = Get(type);
     if(handler == nullptr){
-        Debug::Error("No compress handler find", "Compression");
+        Debug::Error("No compress handler find", LogInfo);
         return false;
     }
     output.clear();
     if(!handler->Compression(input, output)){
-        Debug::Error("Compress failed", "Compression");
+        Debug::Error("Compress failed", LogInfo);
         return false;
     }
     return true;
@@ -36,12 +36,12 @@ bool CompressionManager::Compression(const std::vector<uint8_t>& input, std::uin
 bool CompressionManager::Decompression(const std::vector<uint8_t>& input, std::uint16_t type, std::vector<uint8_t>& output)const{
     CompressionHandler* handler = Get(type);
     if (handler == nullptr) {
-        Debug::Error("No compress handler find", "Compression");
+        Debug::Error("No compress handler find", LogInfo);
         return false;
     }
     output.clear();
     if(!handler->Decompression(input, output)){
-        Debug::Error("Decompress failed", "Compression");
+        Debug::Error("Decompress failed", LogInfo);
         return false;
     }
     return true;

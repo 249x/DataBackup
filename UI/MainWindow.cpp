@@ -2,6 +2,7 @@
 
 #include "Backend.h"
 #include "FilterDialog.h"
+#include "../Core/Managers/Save/SaveManager.h"
 
 #include <QAbstractItemView>
 #include <QCryptographicHash>
@@ -248,10 +249,13 @@ QWidget* MainWindow::BuildBackupTab() {
     optGrid->setHorizontalSpacing(12);
 
     optArchive = new QCheckBox(QStringLiteral("打包：把整棵目录树拼成单个归档文件"), optBox);
+    optArchive->setObjectName(QStringLiteral("optArchive"));
     optGrid->addWidget(optArchive, 0, 0, 1, 3);
 
     optCompress = new QCheckBox(QStringLiteral("压缩"), optBox);
+    optCompress->setObjectName(QStringLiteral("optCompress"));
     compressAlgo = new QComboBox(optBox);
+    compressAlgo->setObjectName(QStringLiteral("compressAlgo"));
     for (const AlgorithmInfo& algo : Backend::CompressionAlgorithms(sys)) {
         compressAlgo->addItem(Backend::Text(algo.name), algo.id);
     }
@@ -261,7 +265,9 @@ QWidget* MainWindow::BuildBackupTab() {
     optGrid->setColumnStretch(2, 1);
 
     optEncrypt = new QCheckBox(QStringLiteral("加密"), optBox);
+    optEncrypt->setObjectName(QStringLiteral("optEncrypt"));
     encryptAlgo = new QComboBox(optBox);
+    encryptAlgo->setObjectName(QStringLiteral("encryptAlgo"));
     for (const AlgorithmInfo& algo : Backend::EncryptionAlgorithms(sys)) {
         encryptAlgo->addItem(Backend::Text(algo.name), algo.id);
     }
@@ -305,6 +311,30 @@ QWidget* MainWindow::BuildBackupTab() {
     settingsPreview->setObjectName(QStringLiteral("preview"));
     settingsPreview->setWordWrap(true);
     root->addWidget(settingsPreview);
+
+    // ---- 设置存档 ----
+    // 存档不自动读写：存哪份、用哪份由用户点这两个按钮决定（命令行里是 save / load）
+    auto* storeBox = new QGroupBox(QStringLiteral("设置存档"), page);
+    auto* storeRow = new QHBoxLayout(storeBox);
+    saveSettings = new QPushButton(QStringLiteral("保存设置"), storeBox);
+    saveSettings->setObjectName(QStringLiteral("saveSettings"));
+    loadSettings = new QPushButton(QStringLiteral("加载设置"), storeBox);
+    loadSettings->setObjectName(QStringLiteral("loadSettings"));
+    deleteSettings = new QPushButton(QStringLiteral("删除存档"), storeBox);
+    deleteSettings->setObjectName(QStringLiteral("deleteSettings"));
+    auto* storeHint = new QLabel(
+        QStringLiteral("save.dat"),
+        storeBox);
+    storeHint->setObjectName(QStringLiteral("hint"));
+    storeHint->setWordWrap(true);
+    storeRow->addWidget(saveSettings);
+    storeRow->addWidget(loadSettings);
+    storeRow->addWidget(deleteSettings);
+    storeRow->addWidget(storeHint, 1);
+    root->addWidget(storeBox);
+    connect(saveSettings, &QPushButton::clicked, this, [this] { SaveSettingsToFile(); });
+    connect(loadSettings, &QPushButton::clicked, this, [this] { LoadSettingsFromFile(); });
+    connect(deleteSettings, &QPushButton::clicked, this, [this] { DeleteSettingsFile(); });
 
     // ---- 筛选摘要 ----
     auto* filterBox = new QGroupBox(QStringLiteral("自定义备份（筛选）"), page);
@@ -358,23 +388,9 @@ QWidget* MainWindow::BuildBackupTab() {
     });
 
     // ---- 控件的初始值取自流水线，而不是写死的默认值 ----
-    // 流水线的设置可能在 Manager 初始化时刚从存档（save.dat）里读回来，所以必须问它：
-    // 写死默认值的话存档等于白读，而且第一次点「备份」时 ApplySettingsToBackend
-    // 还会把界面上这些默认值推回流水线，把刚加载进来的设置覆盖掉。
-    //
-    // 下面这几句 setChecked / SelectAlgorithm 会触发 onChanged 信号，而每个控件是**一个
-    // 一个**同步的：如果不挡住，第一个控件同步完就会把"整份界面状态"推回流水线，
-    // 此刻还没同步到的控件还是默认值，于是压缩算法被改回列表第一项、加密整个被关掉，
-    // 退出时又把这个被改坏的状态存进存档——读档等于白读。所以整段用守卫包起来。
-    syncingSettings = true;
-    if (auto* pipeline = sys.Get<FilePipelineManager>(); pipeline != nullptr) {
-        optArchive->setChecked(pipeline->ArchiveEnabled());
-        optCompress->setChecked(pipeline->CompressionEnabled());
-        SelectAlgorithm(compressAlgo, pipeline->CompressionType());
-        optEncrypt->setChecked(pipeline->EncryptionEnabled());
-        SelectAlgorithm(encryptAlgo, pipeline->EncryptionType());
-    }
-    syncingSettings = false;
+    // 写死默认值的话，第一次点「备份」时 ApplySettingsToBackend 会把界面上的默认值
+    // 推回流水线，覆盖掉命令行里设过的值。
+    RefreshSettingsFromBackend();
 
     return page;
 }
@@ -628,12 +644,20 @@ bool MainWindow::PushSettings(QString& error) {
         error = QStringLiteral("加密算法无效。");
         return false;
     }
+
+    // 路径也是设置项，一起推（空值也推，校验留到执行时）。还原页的控件可能还没建出来
+    pipeline->SetBackupPaths(Backend::Path(backupSrc->text().trimmed()),
+                             Backend::Path(backupDst->text().trimmed()));
+    if (restoreSrc != nullptr && restoreDst != nullptr) {
+        pipeline->SetRestorePaths(Backend::Path(restoreSrc->text().trimmed()),
+                                  Backend::Path(restoreDst->text().trimmed()));
+    }
     return true;
 }
 
 void MainWindow::SyncSettingsToBackend() {
     if (syncingSettings) {
-        return; // 正在把存档值往控件里灌，此时控件上的值还没同步齐，不能反着推回去
+        return; // 正在把内核值往控件里灌，此时控件上的值还没同步齐，不能反着推回去
     }
 
     QString error;
@@ -660,6 +684,107 @@ bool MainWindow::ApplySettingsToBackend(QString& error) {
         return false;
     }
     return true;
+}
+
+void MainWindow::RefreshSettingsFromBackend() {
+    // 内核 -> 控件。同步过程中控件会发 onChanged 信号，而控件是一个一个同步的：
+    // 逐个往下推会让"还没同步到的控件"（仍是旧值）覆盖掉刚读进来的设置，所以整段挡住。
+    syncingSettings = true;
+    if (auto* pipeline = sys.Get<FilePipelineManager>(); pipeline != nullptr) {
+        optArchive->setChecked(pipeline->ArchiveEnabled());
+        optCompress->setChecked(pipeline->CompressionEnabled());
+        SelectAlgorithm(compressAlgo, pipeline->CompressionType());
+        optEncrypt->setChecked(pipeline->EncryptionEnabled());
+        SelectAlgorithm(encryptAlgo, pipeline->EncryptionType());
+
+        // 路径同样是设置项，跟着一起回填（建备份页时还原页的控件还不存在）
+        backupSrc->setText(QDir::toNativeSeparators(Backend::Text(pipeline->BackupSource())));
+        backupDst->setText(QDir::toNativeSeparators(Backend::Text(pipeline->BackupDestination())));
+        if (restoreSrc != nullptr && restoreDst != nullptr) {
+            restoreSrc->setText(
+                QDir::toNativeSeparators(Backend::Text(pipeline->RestoreSource())));
+            restoreDst->setText(
+                QDir::toNativeSeparators(Backend::Text(pipeline->RestoreDestination())));
+        }
+    }
+    syncingSettings = false;
+
+    RefreshSettingsPreview();
+}
+
+void MainWindow::SaveSettingsToFile() {
+    // 先把界面上的值推给内核，存下来的才是"眼下看到的这份设置"
+    QString error;
+    if (!PushSettings(error)) {
+        QMessageBox::warning(this, QStringLiteral("保存失败"), error);
+        return;
+    }
+
+    auto* store = sys.Get<SaveManager>();
+    if (store == nullptr || !store->Save()) {
+        QMessageBox::warning(
+            this, QStringLiteral("保存失败"),
+            QStringLiteral("无法写入程序旁边的 save.dat（目录可能不可写）。"));
+        return;
+    }
+    statusBar()->showMessage(QStringLiteral("设置已保存到 save.dat（含筛选条件）"), 5000);
+}
+
+void MainWindow::LoadSettingsFromFile() {
+    auto* store = sys.Get<SaveManager>();
+    if (store == nullptr) {
+        QMessageBox::warning(this, QStringLiteral("加载失败"),
+                             QStringLiteral("内核 Manager 未初始化。"));
+        return;
+    }
+    if (!store->IsSaveFileExists()) {
+        QMessageBox::information(
+            this, QStringLiteral("没有存档"),
+            QStringLiteral("程序旁边还没有 save.dat，先点「保存设置」建一个。"));
+        return;
+    }
+    if (!store->Load()) {
+        QMessageBox::warning(this, QStringLiteral("加载失败"),
+                             QStringLiteral("save.dat 读取失败，当前设置保持不动。"));
+        return;
+    }
+
+    // 载体是同一份内核状态：控件跟着走，筛选表也要重画（条件也在存档里）
+    RefreshSettingsFromBackend();
+    RefreshFilterTable();
+    statusBar()->showMessage(QStringLiteral("设置已从 save.dat 载入"), 5000);
+}
+
+void MainWindow::DeleteSettingsFile() {
+    auto* store = sys.Get<SaveManager>();
+    if (store == nullptr) {
+        QMessageBox::warning(this, QStringLiteral("删除失败"),
+                             QStringLiteral("内核 Manager 未初始化。"));
+        return;
+    }
+    if (!store->IsSaveFileExists()) {
+        QMessageBox::information(this, QStringLiteral("没有存档"),
+                                 QStringLiteral("程序旁边没有 save.dat，不需要删除。"));
+        return;
+    }
+
+    // 删了没法恢复，先问一句（默认停在「否」）
+    const auto answer = QMessageBox::question(
+        this, QStringLiteral("删除存档"),
+        QStringLiteral("确定删除程序旁边的 save.dat 吗？\n"
+                       "只删这个文件，当前设置与筛选条件保持不变。"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes) {
+        return;
+    }
+
+    if (!store->Delete()) {
+        QMessageBox::warning(
+            this, QStringLiteral("删除失败"),
+            QStringLiteral("无法删除 save.dat（文件可能被占用或目录不可写）。"));
+        return;
+    }
+    statusBar()->showMessage(QStringLiteral("存档已删除"), 5000);
 }
 
 bool MainWindow::LoadKey(QComboBox* source, QLineEdit* edit,
@@ -854,10 +979,12 @@ void MainWindow::StartBackup() {
     }
 
     auto* pipeline = sys.Get<FilePipelineManager>();
-    const auto srcPath = Backend::Path(src);
-    const auto dstPath = Backend::Path(dst);
-    RunJob(QStringLiteral("备份"),
-           [pipeline, srcPath, dstPath] { return pipeline->Backup(srcPath, dstPath); },
+    if (pipeline == nullptr) {
+        QMessageBox::warning(this, QStringLiteral("备份失败"),
+                             QStringLiteral("内核 Manager 未初始化。"));
+        return;
+    }
+    RunJob(QStringLiteral("备份"), [pipeline] { return pipeline->Backup(); },
            backupBar, backupStatus);
 }
 
@@ -898,10 +1025,12 @@ void MainWindow::StartRestore() {
     }
 
     auto* pipeline = sys.Get<FilePipelineManager>();
-    const auto srcPath = Backend::Path(src);
-    const auto dstPath = Backend::Path(dst);
-    RunJob(QStringLiteral("还原"),
-           [pipeline, srcPath, dstPath] { return pipeline->Restore(srcPath, dstPath); },
+    if (pipeline == nullptr) {
+        QMessageBox::warning(this, QStringLiteral("还原失败"),
+                             QStringLiteral("内核 Manager 未初始化。"));
+        return;
+    }
+    RunJob(QStringLiteral("还原"), [pipeline] { return pipeline->Restore(); },
            restoreBar, restoreStatus);
 }
 

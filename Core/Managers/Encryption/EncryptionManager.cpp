@@ -40,7 +40,7 @@ void EncryptionManager::Initialize() {
 bool EncryptionManager::SetKeyPath(const std::filesystem::path& keyPath) {
 	FileIOManager* io = Manager::Get<FileIOManager>();
 	if (io == nullptr || !io->ReadContent(keyPath, key)) {
-		Debug::Error("Failed to read key file: " + Utf8::FromPath(keyPath), "Encryption");
+		Debug::Error("Failed to read key file: " + Utf8::FromPath(keyPath), LogInfo);
 		return false;
 	}
 	return true;
@@ -54,18 +54,18 @@ bool EncryptionManager::HasKey() const noexcept {
 bool EncryptionManager::CheckKey(std::uint16_t type) {
 	EncryptionHandler* handler = Get(type);
 	if (handler == nullptr) {
-		Debug::Error("No encryption handler with id " + std::to_string(type), "Encryption");
+		Debug::Error("No encryption handler with id " + std::to_string(type), LogInfo);
 		return false;
 	}
 	if (key.empty()) {
-		Debug::Error("No key is loaded, run 'key <path>' first", "Encryption");
+		Debug::Error("No key is loaded, run 'key <path>' first", LogInfo);
 		return false;
 	}
 	if (key.size() < handler->MinimumKeySize()) {
 		Debug::Error("Key is too short for algorithm " + std::to_string(type) + ": need " +
 		                 std::to_string(handler->MinimumKeySize()) + " bytes, got " +
 		                 std::to_string(key.size()),
-		             "Encryption");
+		             LogInfo);
 		return false;
 	}
 	return true;
@@ -119,12 +119,12 @@ bool EncryptionManager::Encryption(const std::vector<std::uint8_t>& data,
 {
 	auto it = handlersMap.find(type);
 	if (it == handlersMap.end() || !it->second) {
-		Debug::Error("No encryption handler with id " + std::to_string(type), "Encryption");
+		Debug::Error("No encryption handler with id " + std::to_string(type), LogInfo);
 		return false;
 	}
 	if (!it->second->Encrypt(data, key, output)) {
 		Debug::Error("Encrypt failed: " + Digest(*it->second, type, data.size(), key.size()),
-		             "Encryption");
+		             LogInfo);
 		return false;
 	}
 	return true;
@@ -136,13 +136,13 @@ bool EncryptionManager::Decryption(const std::vector<std::uint8_t>& data,
 {
 	auto it = handlersMap.find(type);
 	if (it == handlersMap.end() || !it->second) {
-		Debug::Error("No encryption handler with id " + std::to_string(type), "Encryption");
+		Debug::Error("No encryption handler with id " + std::to_string(type), LogInfo);
 		return false;
 	}
 	if (!it->second->Decrypt(data, key, output)) {
 		Debug::Error("Decrypt failed: " + Digest(*it->second, type, data.size(), key.size()) +
 		                 ", wrong key or corrupted data?",
-		             "Encryption");
+		             LogInfo);
 		return false;
 	}
 	return true;
